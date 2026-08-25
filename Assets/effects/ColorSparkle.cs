@@ -3,9 +3,9 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// Maintains a fading palette sparkle field with rare contrasting glints over the previous Buffer.
-/// A sparkle is one Tile born at its palette color, fading with the field. A glint is a sparkle
-/// born bright.
+/// Maintains a fading Palette sparkle field with rare bright glints over the previous Buffer.
+/// A sparkle is one Tile born at its Palette color, fading with the field. A glint is a bright
+/// sparkle: the same hue the sparkle would have had on that Tile, lifted to glint luminance.
 /// </summary>
 [EffectSyncSettings(typeof(ColorSparkleSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(ColorSparkleStandaloneSettingsAsset))]
@@ -13,14 +13,11 @@ public class ColorSparkle : EffectBase
 {
     // Standalone Defaults
 
-    /// <summary>Authored chance that an activation uses full-wheel HSV confetti in Standalone Mode, tuned at the wall.</summary>
+    /// <summary>Authored chance that an activation uses a randomized confetti Palette in Standalone Mode, tuned at the wall.</summary>
     private const float StandaloneConfettiChance = 0.125f;
 
-    /// <summary>Authored minimum hue for each HSV confetti sparkle in Standalone Mode.</summary>
-    private const float StandalonePerSparkleHueMin = 0f;
-
-    /// <summary>Authored maximum hue for each HSV confetti sparkle in Standalone Mode.</summary>
-    private const float StandalonePerSparkleHueMax = 1f;
+    /// <summary>Authored number of sorted random hues in a Standalone confetti Palette.</summary>
+    private const int StandaloneConfettiPaletteSize = 16;
 
     /// <summary>Authored minimum cyclic palette coordinate for Standalone palette variants.</summary>
     private const float StandaloneCoordinateMin = 0f;
@@ -28,7 +25,7 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored maximum cyclic palette coordinate for Standalone palette variants.</summary>
     private const float StandaloneCoordinateMax = 1f;
 
-    /// <summary>Authored chance that a Standalone sparkle is born as a contrasting glint.</summary>
+    /// <summary>Authored chance that a Standalone sparkle is lifted to glint luminance on its Palette hue.</summary>
     private const float StandaloneGlintChance = 0.003f;
 
     /// <summary>Authored relative luminance every Standalone glint flashes at.</summary>
@@ -46,15 +43,6 @@ public class ColorSparkle : EffectBase
     /// shorten it.
     /// </summary>
     private const float StandaloneFadePerFrame = 0.975f;
-
-    /// <summary>Authored Standalone hue-scroll speed in wheel revolutions per second.</summary>
-    private const float StandaloneHueBaseRate = 0f;
-
-    /// <summary>Authored Standalone extra hue-scroll speed multiplied by the fixed drive.</summary>
-    private const float StandaloneHueBeatRate = 0f;
-
-    /// <summary>Authored fixed Standalone drive for the extra hue-scroll rate.</summary>
-    private const float StandaloneHueCycleDrive = 0f;
 
     /// <summary>
     /// Standalone palette conditioning keeps palette families readable while retaining their
@@ -74,17 +62,11 @@ public class ColorSparkle : EffectBase
 
     // Sync Defaults
 
-    /// <summary>Authored chance that an activation uses full-wheel HSV confetti in Synced Mode, tuned at the wall.</summary>
+    /// <summary>Authored chance that an activation uses a randomized confetti Palette in Synced Mode, tuned at the wall.</summary>
     private const float SyncConfettiChance = 0.125f;
 
-    /// <summary>Authored minimum hue for each HSV confetti sparkle in Synced Mode.</summary>
-    private const float SyncPerSparkleHueMin = 0f;
-
-    /// <summary>
-    /// Authored maximum hue for each HSV confetti sparkle in Synced Mode, tuned at the wall to a
-    /// fifth of the wheel.
-    /// </summary>
-    private const float SyncPerSparkleHueMax = 0.2f;
+    /// <summary>Authored number of sorted random hues in a Synced confetti Palette.</summary>
+    private const int SyncConfettiPaletteSize = 16;
 
     /// <summary>Authored minimum cyclic palette coordinate for Synced palette variants.</summary>
     private const float SyncCoordinateMin = 0f;
@@ -202,37 +184,98 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored chance that a newly generated Fill sparkle is white.</summary>
     private const float SyncFillWhiteChance = 0.5f;
 
-    /// <summary>Authored Pool Waveform held for the Synced hue-scroll response.</summary>
+    /// <summary>Authored Pool Waveform held for the Synced 2-and-4 Palette turn.</summary>
     private const string SyncWaveformName = "beats 2 and 4";
-
-    /// <summary>Authored Synced base hue-scroll speed in wheel revolutions per second.</summary>
-    private const float SyncHueBaseRate = 0.05f;
-
-    /// <summary>Authored Synced extra hue-scroll speed at the held Waveform's driven peak.</summary>
-    private const float SyncHueBeatRate = 2f;
-
-    /// <summary>Authored minimum hue-scroll drive at the held Waveform's trough.</summary>
-    private const float SyncHueCycleDriveMin = 0f;
-
-    /// <summary>Authored maximum hue-scroll drive at the held Waveform's peak.</summary>
-    private const float SyncHueCycleDriveMax = 2f;
 
     // Runtime mechanism constants
 
-    /// <summary>Structural equal split between palette-single and palette-scatter activations.</summary>
-    private const float PaletteVariantSplit = 0.5f;
+    /// <summary>Structural equal split between single and scatter coordinate policies.</summary>
+    private const float CoordinatePolicySplit = 0.5f;
 
-    /// <summary>Color source selected by the activation Roll.</summary>
-    private enum ColorVariant
+    /// <summary>How an activation chooses the Palette coordinate for a sparkle or glint.</summary>
+    private enum CoordinatePolicy
     {
         /// <summary>Every sparkle samples one cyclic palette coordinate held for the activation.</summary>
-        PaletteSingle,
+        Single,
 
         /// <summary>Every sparkle rolls its own cyclic palette coordinate.</summary>
-        PaletteScatter,
+        Scatter,
+    }
 
-        /// <summary>Every sparkle rolls a full-saturation and full-value HSV hue.</summary>
-        Confetti,
+    /// <summary>
+    /// One Tile's living field sparkle, retaining either its birth Palette coordinate or fixed
+    /// color together with the field fade level.
+    /// </summary>
+    internal struct SparkleState
+    {
+        /// <summary>Whether a sparkle currently occupies the Tile.</summary>
+        private bool active;
+
+        /// <summary>Whether the displayed color follows the activation Palette.</summary>
+        private bool followsPalette;
+
+        /// <summary>The Palette coordinate rolled when a turning sparkle was born.</summary>
+        private float birthCoordinate;
+
+        /// <summary>The birth color held by a Drop, Fill-white, or Standalone glint sparkle.</summary>
+        private Color fixedColor;
+
+        /// <summary>Fraction of the birth color's distance from the field floor still visible.</summary>
+        private float fadeLevel;
+
+        /// <summary>Whether a sparkle currently occupies the Tile.</summary>
+        internal readonly bool Active => active;
+
+        /// <summary>Whether this sparkle reads the activation Palette on every frame.</summary>
+        internal readonly bool FollowsPalette => followsPalette;
+
+        /// <summary>The fixed birth color for a sparkle that skips the Palette turn.</summary>
+        internal readonly Color FixedColor => fixedColor;
+
+        /// <summary>Creates a living sparkle at one birth Palette coordinate and full fade level.</summary>
+        /// <param name="coordinate">The sparkle's cyclic birth coordinate.</param>
+        /// <returns>A sparkle that follows the activation Palette.</returns>
+        internal static SparkleState Palette(float coordinate) => new()
+        {
+            active = true,
+            followsPalette = true,
+            birthCoordinate = coordinate,
+            fadeLevel = 1f,
+        };
+
+        /// <summary>Creates a living fixed-color sparkle at full fade level.</summary>
+        /// <param name="color">The sparkle's fixed birth color.</param>
+        /// <returns>A sparkle that skips the Palette turn.</returns>
+        internal static SparkleState Fixed(Color color) => new()
+        {
+            active = true,
+            followsPalette = false,
+            fixedColor = color,
+            fadeLevel = 1f,
+        };
+
+        /// <summary>Returns the birth coordinate advanced and wrapped by one Hump's progress.</summary>
+        /// <param name="turnProgress">The current Hump's trough-to-trough progress.</param>
+        /// <returns>The displayed cyclic Palette coordinate.</returns>
+        internal readonly float TurnedCoordinate(float turnProgress) =>
+            Mathf.Repeat(birthCoordinate + turnProgress, 1f);
+
+        /// <summary>Advances the field fade and places the current birth color above the floor.</summary>
+        /// <param name="color">The current Palette read or the held fixed birth color.</param>
+        /// <param name="floorColor">The field floor for this frame.</param>
+        /// <param name="fadePerFrame">The fraction of distance from the floor retained this frame.</param>
+        /// <returns>The sparkle's displayed color for this frame.</returns>
+        internal Color Advance(Color color, Color floorColor, float fadePerFrame)
+        {
+            fadeLevel *= fadePerFrame;
+            return floorColor + ((color - floorColor) * fadeLevel);
+        }
+
+        /// <summary>Releases the Tile when a glint replaces the field sparkle.</summary>
+        internal void Clear()
+        {
+            active = false;
+        }
     }
 
     /// <summary>One Synced glint's independently timed birth color and remaining fade clock.</summary>
@@ -278,9 +321,7 @@ public class ColorSparkle : EffectBase
     public static ColorSparkleStandaloneSettings StandaloneDefaults => new()
     {
         ConfettiChance = StandaloneConfettiChance,
-        PerSparkleHue = new FloatRange(
-            StandalonePerSparkleHueMin,
-            StandalonePerSparkleHueMax),
+        ConfettiPaletteSize = StandaloneConfettiPaletteSize,
         CoordinateRange = new FloatRange(
             StandaloneCoordinateMin,
             StandaloneCoordinateMax),
@@ -289,9 +330,6 @@ public class ColorSparkle : EffectBase
         FloorLevel = StandaloneFloorLevel,
         SparklesPerSecond = StandaloneSparklesPerSecond,
         FadePerFrame = StandaloneFadePerFrame,
-        HueBaseRate = StandaloneHueBaseRate,
-        HueBeatRate = StandaloneHueBeatRate,
-        HueCycleDrive = StandaloneHueCycleDrive,
         PaletteConditioning = StandalonePaletteConditioning,
     };
 
@@ -299,9 +337,7 @@ public class ColorSparkle : EffectBase
     public static ColorSparkleSyncSettings SyncDefaults => new()
     {
         ConfettiChance = SyncConfettiChance,
-        PerSparkleHue = new FloatRange(
-            SyncPerSparkleHueMin,
-            SyncPerSparkleHueMax),
+        ConfettiPaletteSize = SyncConfettiPaletteSize,
         CoordinateRange = new FloatRange(
             SyncCoordinateMin,
             SyncCoordinateMax),
@@ -344,11 +380,6 @@ public class ColorSparkle : EffectBase
         DropSparkleDivisor = SyncDropSparkleDivisor,
         FillWhiteChance = SyncFillWhiteChance,
         WaveformName = SyncWaveformName,
-        HueBaseRate = SyncHueBaseRate,
-        HueBeatRate = SyncHueBeatRate,
-        HueCycleDrive = new FloatRange(
-            SyncHueCycleDriveMin,
-            SyncHueCycleDriveMax),
     };
 
     /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
@@ -363,11 +394,20 @@ public class ColorSparkle : EffectBase
     /// </summary>
     private readonly ConditionedPaletteCache conditionedPalette = new();
 
-    /// <summary>The activation's selected color source.</summary>
-    private ColorVariant colorVariant;
+    /// <summary>Randomized Palette held when the activation Roll selects confetti.</summary>
+    private GPalette confettiPalette;
 
-    /// <summary>The cyclic coordinate held when <see cref="ColorVariant.PaletteSingle"/> is selected.</summary>
+    /// <summary>Whether every activation Palette read comes from the held confetti Palette.</summary>
+    private bool usesConfettiPalette;
+
+    /// <summary>The activation's single-or-scatter coordinate policy.</summary>
+    private CoordinatePolicy coordinatePolicy;
+
+    /// <summary>The cyclic coordinate held when <see cref="CoordinatePolicy.Single"/> is selected.</summary>
     private float singlePaletteCoordinate;
+
+    /// <summary>Per-Tile field sparkle coordinates, fixed colors, and fade levels.</summary>
+    private SparkleState[] sparkles;
 
     /// <summary>Fractional sparkle births carried between rendered frames for uniform per-second cadence.</summary>
     private float sparkleCarry;
@@ -384,11 +424,8 @@ public class ColorSparkle : EffectBase
     /// <summary>Independent per-Tile Synced glint colors and fade clocks.</summary>
     private GlintState[] glints;
 
-    /// <summary>Pool entry name currently held for hue scrolling, retained for live-edit reacquisition.</summary>
+    /// <summary>Pool entry name held for the 2-and-4 turn, retained for live-edit reacquisition.</summary>
     private string acquiredWaveformName;
-
-    /// <summary>Cyclic hue offset applied only when a sparkle or glint is born.</summary>
-    private float hueScroll;
 
     /// <summary>Energy read on the latest Synced frame for the debug display.</summary>
     private Energy? liveEnergy;
@@ -416,16 +453,18 @@ public class ColorSparkle : EffectBase
         Repertoire.EnergyMid;
 
     /// <summary>
-    /// Returns the activation's selected color variant, live Energy, Levels drive, most recent
-    /// glint count, and hue scroll for the Controller debug display.
+    /// Returns the activation Palette and coordinate policy, live Energy, Levels drive, and most
+    /// recent glint count for the Controller debug display.
     /// </summary>
     public override string DebugText()
     {
-        string variant = colorVariant == ColorVariant.PaletteSingle
-            ? $"ColorSparkle\nPalette single {singlePaletteCoordinate:0.00}"
-            : $"ColorSparkle\n{colorVariant}";
-        return $"{variant}\nENERGY {liveEnergy?.ToString() ?? "—"} " +
-            $"LEVEL {levelsDriveReading:0.00}\nGLINTS {lastGlintCount} SCROLL {hueScroll:0.00}";
+        string paletteName = usesConfettiPalette ? "Confetti" : "Shared";
+        string coordinate = coordinatePolicy == CoordinatePolicy.Single
+            ? $"single {singlePaletteCoordinate:0.00}"
+            : "scatter";
+        return $"ColorSparkle\n{paletteName} Palette {coordinate}\n" +
+            $"ENERGY {liveEnergy?.ToString() ?? "—"} LEVEL {levelsDriveReading:0.00}\n" +
+            $"GLINTS {lastGlintCount}";
     }
 
     /// <summary>
@@ -445,10 +484,14 @@ public class ColorSparkle : EffectBase
         float confettiChance = isSynced
             ? SyncSettings.ConfettiChance
             : standaloneSettings.ConfettiChance;
+        int confettiPaletteSize = isSynced
+            ? SyncSettings.ConfettiPaletteSize
+            : standaloneSettings.ConfettiPaletteSize;
         FloatRange coordinateRange = isSynced
             ? SyncSettings.CoordinateRange
             : standaloneSettings.CoordinateRange;
-        RollColorVariant(confettiChance, coordinateRange);
+        RollActivationPalette(confettiChance, confettiPaletteSize);
+        RollCoordinatePolicy(coordinateRange);
         dropHue = Random.Range(SyncSettings.DropHue.Min, SyncSettings.DropHue.Max);
 
         string requestedWaveformName = SyncSettings.WaveformName;
@@ -460,37 +503,60 @@ public class ColorSparkle : EffectBase
         sparkleRateBeat = null;
         lastGlintBeat = null;
         lastGlintCount = 0;
-        hueScroll = 0f;
         wasSynced = isSynced;
         liveEnergy = isSynced ? beatManager.Energy.Level : null;
         levelsDriveReading = isSynced
             ? ReadLevel(SyncSettings.LevelsDriveBand, SyncSettings.LevelsDriveForm)
             : 0f;
-        ResetGlints();
+        ResetSparklesAndGlints();
         buffer.Clear();
         controller.debugText.text = DebugText();
     }
 
     /// <summary>
-    /// Selects the activation color variant and, for palette single, its held cyclic coordinate.
-    /// The fixed palette split is structural; all authored probabilities and endpoints come from
-    /// the active Effect Settings surface.
+    /// Rolls the activation's Palette source and builds its fixed sorted confetti Palette when
+    /// selected. Settings resolution happens before this method and consumes no Random.
     /// </summary>
-    /// <param name="confettiChance">Chance that the activation selects HSV confetti.</param>
-    /// <param name="coordinateRange">Cyclic palette coordinate endpoints for palette variants.</param>
-    private void RollColorVariant(float confettiChance, FloatRange coordinateRange)
+    /// <param name="confettiChance">Chance that this activation uses a confetti Palette.</param>
+    /// <param name="confettiPaletteSize">Number of random hues in the confetti Palette.</param>
+    private void RollActivationPalette(float confettiChance, int confettiPaletteSize)
     {
-        singlePaletteCoordinate = 0f;
-        if (Random.value < confettiChance)
+        usesConfettiPalette = Random.value < confettiChance;
+        confettiPalette = usesConfettiPalette
+            ? CreateConfettiPalette(confettiPaletteSize)
+            : null;
+    }
+
+    /// <summary>Builds one confetti Palette from sorted full-saturation, full-value random hues.</summary>
+    /// <param name="size">Number of random Palette entries.</param>
+    /// <returns>The fixed confetti Palette for one activation.</returns>
+    internal static GPalette CreateConfettiPalette(int size)
+    {
+        var hues = new float[size];
+        for (int i = 0; i < hues.Length; i++)
         {
-            colorVariant = ColorVariant.Confetti;
-            return;
+            hues[i] = Random.value;
         }
 
-        colorVariant = Random.value < PaletteVariantSplit
-            ? ColorVariant.PaletteSingle
-            : ColorVariant.PaletteScatter;
-        if (colorVariant == ColorVariant.PaletteSingle)
+        Array.Sort(hues);
+        var colors = new Color[hues.Length];
+        for (int i = 0; i < colors.Length; i++)
+        {
+            colors[i] = Color.HSVToRGB(hues[i], 1f, 1f);
+        }
+
+        return new GPalette(colors);
+    }
+
+    /// <summary>Rolls the activation's single-or-scatter coordinate policy.</summary>
+    /// <param name="coordinateRange">Active mode's cyclic Palette coordinate endpoints.</param>
+    private void RollCoordinatePolicy(FloatRange coordinateRange)
+    {
+        singlePaletteCoordinate = 0f;
+        coordinatePolicy = Random.value < CoordinatePolicySplit
+            ? CoordinatePolicy.Single
+            : CoordinatePolicy.Scatter;
+        if (coordinatePolicy == CoordinatePolicy.Single)
         {
             singlePaletteCoordinate = Random.Range(
                 coordinateRange.Min,
@@ -523,17 +589,9 @@ public class ColorSparkle : EffectBase
             sparkleRateBeat = null;
             lastGlintBeat = null;
             lastGlintCount = 0;
-            if (!isSynced)
-            {
-                hueScroll = 0f;
-            }
-
             wasSynced = isSynced;
         }
 
-        FloatRange perSparkleHue = isSynced
-            ? SyncSettings.PerSparkleHue
-            : standaloneSettings.PerSparkleHue;
         FloatRange coordinateRange = isSynced
             ? SyncSettings.CoordinateRange
             : standaloneSettings.CoordinateRange;
@@ -547,21 +605,7 @@ public class ColorSparkle : EffectBase
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
         conditionedPalette.Refresh(APalette, paletteConditioning);
-
-        float hueCycleDrive = isSynced
-            ? waveform.Lerp(
-                SyncSettings.HueCycleDrive.Min,
-                SyncSettings.HueCycleDrive.Max)
-            : standaloneSettings.HueCycleDrive;
-        float hueBaseRate = isSynced
-            ? SyncSettings.HueBaseRate
-            : standaloneSettings.HueBaseRate;
-        float hueBeatRate = isSynced
-            ? SyncSettings.HueBeatRate
-            : standaloneSettings.HueBeatRate;
-        hueScroll = Mathf.Repeat(
-            hueScroll + ((hueBaseRate + (hueCycleDrive * hueBeatRate)) * effectDelta),
-            1f);
+        float turnProgress = waveform.TroughToTroughProgress;
 
         float sparklesPerSecond;
         if (isSynced)
@@ -584,7 +628,12 @@ public class ColorSparkle : EffectBase
         }
 
         Color floorColor = FindDarkestConditionedPaletteColor() * floorLevel;
-        FadeFieldAndGlints(floorColor, fadePerFrame, effectDelta, isSynced);
+        FadeFieldAndGlints(
+            floorColor,
+            fadePerFrame,
+            effectDelta,
+            isSynced,
+            turnProgress);
 
         sparkleCarry += sparklesPerSecond * effectDelta;
         int count = Mathf.FloorToInt(sparkleCarry);
@@ -597,27 +646,30 @@ public class ColorSparkle : EffectBase
         }
 
         bool fillActive = beatManager.Fill.Active;
+        Color dropColor = dropActive
+            ? Color.HSVToRGB(dropHue, 1f, 1f)
+            : default;
         for (int i = 0; i < count; i++)
         {
-            Color sparkleColor = dropActive
-                ? Color.HSVToRGB(dropHue, 1f, 1f)
-                : ReadSparkleColor(perSparkleHue, coordinateRange);
-            if (fillActive && Random.value < SyncSettings.FillWhiteChance)
+            bool fillWhite = fillActive && Random.value < SyncSettings.FillWhiteChance;
+            if (dropActive || fillWhite)
             {
-                sparkleColor = Color.white;
+                SpawnFixedSparkle(fillWhite ? Color.white : dropColor, turnProgress);
+                continue;
             }
 
+            float coordinate = RollSparkleCoordinate(coordinateRange);
             if (isSynced)
             {
-                SpawnSyncedSparkle(sparkleColor);
+                SpawnSyncedPaletteSparkle(coordinate, turnProgress);
             }
             else
             {
-                SpawnStandaloneSparkle(
-                    sparkleColor,
+                SpawnStandalonePaletteSparkle(
+                    coordinate,
                     standaloneSettings.GlintChance,
                     standaloneSettings.GlintLuminance,
-                    coordinateRange);
+                    turnProgress);
             }
         }
 
@@ -709,7 +761,7 @@ public class ColorSparkle : EffectBase
     }
 
     /// <summary>
-    /// Fires every glint for one qualifying beat in the current frame, with independent palette,
+    /// Fires every glint for one qualifying beat in the current frame, with independent Palette,
     /// luminance, and beat-fraction fade rolls.
     /// </summary>
     /// <param name="coordinateRange">Live cyclic palette coordinate endpoints for glint rolls.</param>
@@ -736,9 +788,7 @@ public class ColorSparkle : EffectBase
         for (int i = 0; i < count; i++)
         {
             int tileIndex = Random.Range(0, buffer.Length);
-            float coordinate = Mathf.Repeat(
-                Random.Range(coordinateRange.Min, coordinateRange.Max) + hueScroll,
-                1f);
+            float coordinate = RollSparkleCoordinate(coordinateRange);
             float luminance = Random.Range(
                 SyncSettings.GlintLuminance.Min,
                 SyncSettings.GlintLuminance.Max);
@@ -746,7 +796,7 @@ public class ColorSparkle : EffectBase
                 SyncSettings.GlintFadeBeats.Min,
                 SyncSettings.GlintFadeBeats.Max);
             Color color = SetLuminance(
-                conditionedPalette.ReadCyclic(coordinate, doblend: true),
+                ReadActivationPalette(coordinate),
                 luminance);
             StartGlint(tileIndex, color, beatSeconds * fadeBeats);
         }
@@ -782,6 +832,13 @@ public class ColorSparkle : EffectBase
         glints = new GlintState[buffer.Length];
     }
 
+    /// <summary>Clears every field sparkle and glint for a fresh activation.</summary>
+    internal void ResetSparklesAndGlints()
+    {
+        sparkles = new SparkleState[buffer.Length];
+        glints = new GlintState[buffer.Length];
+    }
+
     /// <summary>
     /// Fades the field with its retained-per-frame rule while each active Synced glint instead
     /// advances on its own seconds clock.
@@ -790,17 +847,30 @@ public class ColorSparkle : EffectBase
     /// <param name="fadePerFrame">Fraction of field distance retained this frame.</param>
     /// <param name="deltaSeconds">Elapsed frame time in seconds.</param>
     /// <param name="renderGlints">Whether Synced glints own their active Tiles this frame.</param>
+    /// <param name="turnProgress">Current trough-to-trough progress of the held Waveform.</param>
     internal void FadeFieldAndGlints(
         Color floorColor,
         float fadePerFrame,
         float deltaSeconds,
-        bool renderGlints)
+        bool renderGlints,
+        float turnProgress)
     {
         for (int tileIndex = 0; tileIndex < buffer.Length; tileIndex++)
         {
             if (renderGlints && glints[tileIndex].Active)
             {
                 buffer[tileIndex] = glints[tileIndex].Advance(floorColor, deltaSeconds);
+            }
+            else if (sparkles[tileIndex].Active)
+            {
+                SparkleState sparkle = sparkles[tileIndex];
+                Color color = sparkle.FollowsPalette
+                    ? ReadActivationPalette(sparkle.TurnedCoordinate(turnProgress))
+                    : sparkle.FixedColor;
+                buffer[tileIndex] = sparkles[tileIndex].Advance(
+                    color,
+                    floorColor,
+                    fadePerFrame);
             }
             else
             {
@@ -816,61 +886,70 @@ public class ColorSparkle : EffectBase
     /// <param name="durationSeconds">The glint's independently rolled fade duration.</param>
     internal void StartGlint(int tileIndex, Color color, float durationSeconds)
     {
+        sparkles[tileIndex].Clear();
         glints[tileIndex].Start(color, durationSeconds);
         buffer[tileIndex] = color;
     }
 
-    /// <summary>Writes a Synced field sparkle only when no fading glint owns the selected Tile.</summary>
+    /// <summary>Starts a field sparkle only when no fading glint owns the selected Tile.</summary>
     /// <param name="tileIndex">The random Tile selected for the field sparkle.</param>
-    /// <param name="color">The field sparkle's birth color.</param>
+    /// <param name="sparkle">The Palette-following or fixed-color sparkle to start.</param>
+    /// <param name="turnProgress">Current trough-to-trough progress for its birth frame.</param>
     /// <returns>True when the sparkle was written; false while a glint protects the Tile.</returns>
-    internal bool TryWriteSyncedSparkle(int tileIndex, Color color)
+    internal bool TryStartSparkle(
+        int tileIndex,
+        SparkleState sparkle,
+        float turnProgress)
     {
         if (glints[tileIndex].Active)
         {
             return false;
         }
 
+        sparkles[tileIndex] = sparkle;
+        Color color = sparkle.FollowsPalette
+            ? ReadActivationPalette(sparkle.TurnedCoordinate(turnProgress))
+            : sparkle.FixedColor;
         buffer[tileIndex] = color;
         return true;
     }
 
-    /// <summary>Selects one random Tile for a Synced field sparkle.</summary>
-    /// <param name="color">The sparkle's birth color.</param>
-    private void SpawnSyncedSparkle(Color color)
+    /// <summary>Selects one random Tile for a Synced Palette-following field sparkle.</summary>
+    /// <param name="coordinate">The sparkle's cyclic birth coordinate.</param>
+    /// <param name="turnProgress">Current trough-to-trough progress for its birth frame.</param>
+    private void SpawnSyncedPaletteSparkle(float coordinate, float turnProgress)
     {
-        TryWriteSyncedSparkle(Random.Range(0, buffer.Length), color);
+        TryStartSparkle(
+            Random.Range(0, buffer.Length),
+            SparkleState.Palette(coordinate),
+            turnProgress);
     }
 
-    /// <summary>
-    /// Resolves one non-Drop sparkle color from the activation variant. Palette colors are returned
-    /// as conditioned and crossfaded, with their authored saturation and luminance unchanged.
-    /// </summary>
-    /// <param name="perSparkleHue">Active mode's full-value HSV hue endpoints.</param>
-    /// <param name="coordinateRange">Active mode's cyclic palette coordinate endpoints.</param>
-    /// <returns>The sparkle's birth color.</returns>
-    private Color ReadSparkleColor(
-        FloatRange perSparkleHue,
-        FloatRange coordinateRange)
+    /// <summary>Selects one random Tile for a fixed Drop or Fill-white field sparkle.</summary>
+    /// <param name="color">The fixed birth color.</param>
+    /// <param name="turnProgress">Current trough-to-trough progress, ignored by fixed sparkles.</param>
+    private void SpawnFixedSparkle(Color color, float turnProgress)
     {
-        return colorVariant switch
-        {
-            ColorVariant.Confetti => Color.HSVToRGB(
-                Mathf.Repeat(
-                    Random.Range(perSparkleHue.Min, perSparkleHue.Max) + hueScroll,
-                    1f),
-                1f,
-                1f),
-            ColorVariant.PaletteScatter => conditionedPalette.ReadCyclic(
-                Mathf.Repeat(
-                    Random.Range(coordinateRange.Min, coordinateRange.Max) + hueScroll,
-                    1f),
-                doblend: true),
-            _ => conditionedPalette.ReadCyclic(
-                Mathf.Repeat(singlePaletteCoordinate + hueScroll, 1f),
-                doblend: true),
-        };
+        TryStartSparkle(
+            Random.Range(0, buffer.Length),
+            SparkleState.Fixed(color),
+            turnProgress);
     }
+
+    /// <summary>Returns the activation's held coordinate or rolls one scatter coordinate.</summary>
+    /// <param name="coordinateRange">Active mode's cyclic Palette coordinate endpoints.</param>
+    /// <returns>The Palette coordinate for one sparkle or glint.</returns>
+    private float RollSparkleCoordinate(FloatRange coordinateRange) =>
+        coordinatePolicy == CoordinatePolicy.Single
+            ? singlePaletteCoordinate
+            : Random.Range(coordinateRange.Min, coordinateRange.Max);
+
+    /// <summary>Reads one cyclic coordinate from the activation's single Palette path.</summary>
+    /// <param name="coordinate">The cyclic Palette coordinate.</param>
+    /// <returns>The blended activation Palette color at that coordinate.</returns>
+    private Color ReadActivationPalette(float coordinate) => usesConfettiPalette
+        ? confettiPalette.ReadCyclic(coordinate, doblend: true)
+        : conditionedPalette.ReadCyclic(coordinate, doblend: true);
 
     /// <summary>
     /// Finds the darkest color in the active conditioned palette crossfade. Scanning every cyclic
@@ -925,33 +1004,29 @@ public class ColorSparkle : EffectBase
         (float)index / length;
 
     /// <summary>
-    /// Writes one uniformly placed Standalone sparkle. A rare glint instead flashes its single Tile
-    /// with the conditioned palette at its own rolled coordinate, set to the glint luminance — a
-    /// glint contrasts the field by hue and brightness, never by size.
+    /// Writes one uniformly placed Standalone Palette sparkle. A rare glint reads the same coordinate
+    /// at glint luminance and becomes fixed so luminance is its only difference from that sparkle.
     /// </summary>
-    /// <param name="color">The sparkle's birth color.</param>
+    /// <param name="coordinate">The sparkle's cyclic birth coordinate.</param>
     /// <param name="glintChance">Chance that this sparkle is born as a glint.</param>
     /// <param name="glintLuminance">Relative luminance every glint flashes at.</param>
-    /// <param name="coordinateRange">Cyclic palette coordinate endpoints for the glint's own roll.</param>
-    private void SpawnStandaloneSparkle(
-        Color color,
+    /// <param name="turnProgress">Current trough-to-trough progress, resting at zero in Standalone.</param>
+    private void SpawnStandalonePaletteSparkle(
+        float coordinate,
         float glintChance,
         float glintLuminance,
-        FloatRange coordinateRange)
+        float turnProgress)
     {
         int tileIndex = Random.Range(0, buffer.Length);
+        SparkleState sparkle = SparkleState.Palette(coordinate);
         if (Random.value < glintChance)
         {
-            color = SetLuminance(
-                conditionedPalette.ReadCyclic(
-                    Mathf.Repeat(
-                        Random.Range(coordinateRange.Min, coordinateRange.Max) + hueScroll,
-                        1f),
-                    doblend: true),
-                glintLuminance);
+            sparkle = SparkleState.Fixed(SetLuminance(
+                ReadActivationPalette(coordinate),
+                glintLuminance));
         }
 
-        buffer[tileIndex] = color;
+        TryStartSparkle(tileIndex, sparkle, turnProgress);
     }
 
     /// <summary>
@@ -988,21 +1063,21 @@ public class ColorSparkle : EffectBase
 
 /// <summary>
 /// The serializable value shape shared by ColorSparkle's Standalone Defaults and saved Standalone
-/// Settings for its authored no-music palette sparkle field.
+/// Settings for its authored no-music activation Palette and field rendering.
 /// </summary>
 [Serializable]
 public sealed class ColorSparkleStandaloneSettings
 {
-    /// <summary>Chance that the activation Roll selects HSV confetti.</summary>
+    /// <summary>Chance that the activation Roll selects a randomized confetti Palette.</summary>
     [Range(0f, 1f)] public float ConfettiChance;
 
-    /// <summary>Per-sparkle hue range used by the HSV confetti variant.</summary>
-    public FloatRange PerSparkleHue;
+    /// <summary>Number of sorted random full-saturation, full-value HSV hues in a confetti Palette.</summary>
+    public int ConfettiPaletteSize;
 
-    /// <summary>Cyclic palette coordinate range used by palette-single and palette-scatter variants.</summary>
+    /// <summary>Cyclic Palette coordinate range every coordinate roll draws from: the activation's held single coordinate, or each scatter sparkle's own.</summary>
     public FloatRange CoordinateRange;
 
-    /// <summary>Chance that a spawned sparkle is born as a contrasting glint.</summary>
+    /// <summary>Chance that a spawned sparkle is lifted to glint luminance on its Palette hue.</summary>
     [Range(0f, 0.05f)] public float GlintChance;
 
     /// <summary>Relative luminance every glint flashes at.</summary>
@@ -1019,15 +1094,6 @@ public sealed class ColorSparkleStandaloneSettings
     /// preserves the original sparkle lifetime, so live tuning can only make the fade faster.
     /// </summary>
     [Range(0.9f, 0.98f)] public float FadePerFrame;
-
-    /// <summary>Baseline hue-scroll speed in wheel revolutions per second.</summary>
-    [Min(0f)] public float HueBaseRate;
-
-    /// <summary>Extra hue-scroll speed multiplied by the fixed Standalone drive.</summary>
-    [Min(0f)] public float HueBeatRate;
-
-    /// <summary>Fixed Standalone drive applied to the extra hue-scroll rate.</summary>
-    [Min(0f)] public float HueCycleDrive;
 
     /// <summary>
     /// Live Effect-local palette conditioning for Standalone Mode, independently saved so tuning it
@@ -1048,11 +1114,7 @@ public sealed class ColorSparkleStandaloneSettings
         }
 
         ConfettiChance = source.ConfettiChance;
-        PerSparkleHue = new FloatRange(
-            source.PerSparkleHue.Min,
-            source.PerSparkleHue.Max,
-            source.PerSparkleHue.LowRail,
-            source.PerSparkleHue.HighRail);
+        ConfettiPaletteSize = source.ConfettiPaletteSize;
         CoordinateRange = new FloatRange(
             source.CoordinateRange.Min,
             source.CoordinateRange.Max,
@@ -1063,24 +1125,24 @@ public sealed class ColorSparkleStandaloneSettings
         FloorLevel = source.FloorLevel;
         SparklesPerSecond = source.SparklesPerSecond;
         FadePerFrame = source.FadePerFrame;
-        HueBaseRate = source.HueBaseRate;
-        HueBeatRate = source.HueBeatRate;
-        HueCycleDrive = source.HueCycleDrive;
         PaletteConditioning = source.PaletteConditioning;
     }
 }
 
-/// <summary>The serializable value shape shared by ColorSparkle's Sync Defaults and Sync Settings, including its retained Drop and Fill controls.</summary>
+/// <summary>
+/// The serializable value shape shared by ColorSparkle's Sync Defaults and saved Sync Settings for
+/// its Palette field, musical response, and retained Drop and Fill controls.
+/// </summary>
 [Serializable]
 public sealed class ColorSparkleSyncSettings
 {
-    /// <summary>Chance that the activation Roll selects HSV confetti.</summary>
+    /// <summary>Chance that the activation Roll selects a randomized confetti Palette.</summary>
     [Range(0f, 1f)] public float ConfettiChance;
 
-    /// <summary>Per-sparkle hue range used by the HSV confetti variant.</summary>
-    public FloatRange PerSparkleHue;
+    /// <summary>Number of sorted random full-saturation, full-value HSV hues in a confetti Palette.</summary>
+    public int ConfettiPaletteSize;
 
-    /// <summary>Cyclic palette coordinate range used by palette-single and palette-scatter variants.</summary>
+    /// <summary>Cyclic Palette coordinate range every coordinate roll draws from: the activation's held single coordinate, or each scatter sparkle's own.</summary>
     public FloatRange CoordinateRange;
 
     /// <summary>Sparkle birth-rate range while Energy is Low.</summary>
@@ -1154,21 +1216,12 @@ public sealed class ColorSparkleSyncSettings
     [Range(0f, 1f)] public float FillWhiteChance;
 
     /// <summary>
-    /// Live Pool entry name held for hue scrolling. A missing name is a visible configuration
+    /// Live Pool entry name held for the 2-and-4 Palette turn. A missing name is a visible configuration
     /// failure rather than a substituted Waveform.
     /// </summary>
-    [Header("Hue scroll")]
+    [Header("Hue turn")]
     [WaveformName]
     public string WaveformName;
-
-    /// <summary>Baseline hue-scroll speed in wheel revolutions per second.</summary>
-    [Min(0f)] public float HueBaseRate;
-
-    /// <summary>Extra hue-scroll speed applied through the held Waveform.</summary>
-    [Min(0f)] public float HueBeatRate;
-
-    /// <summary>Hue-scroll drive range interpolated by the held Waveform.</summary>
-    public FloatRange HueCycleDrive;
 
     /// <summary>
     /// Copies every ColorSparkle Sync Setting, including range endpoints, Rails, palette
@@ -1183,11 +1236,7 @@ public sealed class ColorSparkleSyncSettings
         }
 
         ConfettiChance = source.ConfettiChance;
-        PerSparkleHue = new FloatRange(
-            source.PerSparkleHue.Min,
-            source.PerSparkleHue.Max,
-            source.PerSparkleHue.LowRail,
-            source.PerSparkleHue.HighRail);
+        ConfettiPaletteSize = source.ConfettiPaletteSize;
         CoordinateRange = new FloatRange(
             source.CoordinateRange.Min,
             source.CoordinateRange.Max,
@@ -1218,9 +1267,6 @@ public sealed class ColorSparkleSyncSettings
         DropSparkleDivisor = source.DropSparkleDivisor;
         FillWhiteChance = source.FillWhiteChance;
         WaveformName = source.WaveformName;
-        HueBaseRate = source.HueBaseRate;
-        HueBeatRate = source.HueBeatRate;
-        HueCycleDrive = Copy(source.HueCycleDrive);
     }
 
     /// <summary>Copies one Float Range with its endpoints and live-tuned Rails.</summary>

@@ -15,11 +15,7 @@ MonoBehaviour:
   effectTypeName: ColorSparkle
   settings:
     ConfettiChance: 0.125
-    PerSparkleHue:
-      Min: 0
-      Max: 1
-      LowRail: 0
-      HighRail: 1
+    ConfettiPaletteSize: 16
     CoordinateRange:
       Min: 0
       Max: 1
@@ -30,9 +26,6 @@ MonoBehaviour:
     FloorLevel: 0
     SparklesPerSecond: 900
     FadePerFrame: 0.975
-    HueBaseRate: 0
-    HueBeatRate: 0
-    HueCycleDrive: 0
     PaletteConditioning:
       TargetLuminance: 0.4
       MinimumLuminance: 0.12
