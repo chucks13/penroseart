@@ -78,8 +78,8 @@ public class ColorSparkle : EffectBase
     /// </summary>
     private const float SyncCoordinateMax = 1f;
 
-    /// <summary>Authored chance that each Grid Boundary changes the shared palette, tuned at the wall.</summary>
-    private const float SyncGridPaletteChangeChance = 0.5f;
+    /// <summary>Authored chance that each Grid Boundary rolls the activation's Palette again, tuned at the wall to two in three.</summary>
+    private const float SyncGridPaletteChangeChance = 0.6666f;
 
     /// <summary>Authored minimum Synced sparkle rate while Energy is Low, tuned at the wall.</summary>
     private const float SyncLowSparklesPerSecondMin = 400f;
@@ -159,11 +159,12 @@ public class ColorSparkle : EffectBase
 
     /// <summary>
     /// Sync palette conditioning is independently live so tuning cannot drift the Standalone look.
-    /// It starts from the same Angles authored preset.
+    /// It starts from the Angles authored preset with the target luminance lifted at the wall to 0.5,
+    /// so sparkles and conditioned confetti sit brighter than the Standalone field.
     /// </summary>
     private static PaletteConditioning SyncPaletteConditioning => new()
     {
-        TargetLuminance = 0.4f,
+        TargetLuminance = 0.5f,
         MinimumLuminance = 0.12f,
         LuminanceEqualization = 0.85f,
         HueSpreadReference = 0.5f,
@@ -182,8 +183,8 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored divisor that halves the number of generated sparkles during a Drop.</summary>
     private const int SyncDropSparkleDivisor = 2;
 
-    /// <summary>Authored chance that a newly generated Fill sparkle is born the Fill colour.</summary>
-    private const float SyncFillWhiteChance = 0.5f;
+    /// <summary>Authored chance that a newly generated Fill sparkle is born the Fill colour, tuned at the wall.</summary>
+    private const float SyncFillWhiteChance = 0.75f;
 
     /// <summary>Authored colour a Fill sparkle is born with: white, so the Fill reads as a whitening of the field.</summary>
     private static Color SyncFillSparkleColor => Color.white;
