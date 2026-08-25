@@ -1333,8 +1333,12 @@ public sealed class EffectSyncSettingsTests
             DuplicateThreshold = 0.06f,
             HueRedistribution = 0.61f,
         };
-        asset.Settings.DropHue = new FloatRange(0.62f, 0.63f, 0.61f, 0.64f);
-        asset.Settings.DropSparkleDivisor = 7;
+        asset.Settings.DropStarveBeats = 7;
+        asset.Settings.DropStarveFloor = 0.62f;
+        asset.Settings.DropImpactGlints = new IntRange(63, 64, 62, 65);
+        asset.Settings.DropFloodMultiplier = 4.5f;
+        asset.Settings.DropRecoverBeats = 19;
+        asset.Settings.DropFadePerFrame = 0.94f;
         asset.Settings.FillWhiteChance = 0.65f;
         asset.Settings.FillSparkleColor = new Color(0.66f, 0.67f, 0.68f, 1f);
         asset.Settings.WaveformName = "test waveform";
@@ -1373,8 +1377,14 @@ public sealed class EffectSyncSettingsTests
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,
             defaults.PaletteConditioning);
-        AssertFloatRangeEqual(asset.Settings.DropHue, defaults.DropHue);
-        Assert.That(asset.Settings.DropSparkleDivisor, Is.EqualTo(defaults.DropSparkleDivisor));
+        Assert.That(asset.Settings.DropStarveBeats, Is.EqualTo(defaults.DropStarveBeats));
+        Assert.That(asset.Settings.DropStarveFloor, Is.EqualTo(defaults.DropStarveFloor));
+        AssertIntRangeEqual(asset.Settings.DropImpactGlints, defaults.DropImpactGlints);
+        Assert.That(
+            asset.Settings.DropFloodMultiplier,
+            Is.EqualTo(defaults.DropFloodMultiplier));
+        Assert.That(asset.Settings.DropRecoverBeats, Is.EqualTo(defaults.DropRecoverBeats));
+        Assert.That(asset.Settings.DropFadePerFrame, Is.EqualTo(defaults.DropFadePerFrame));
         Assert.That(asset.Settings.FillWhiteChance, Is.EqualTo(defaults.FillWhiteChance));
         Assert.That(asset.Settings.FillSparkleColor, Is.EqualTo(defaults.FillSparkleColor));
         Assert.That(asset.Settings.WaveformName, Is.EqualTo(defaults.WaveformName));

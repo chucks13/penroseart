@@ -174,14 +174,26 @@ public class ColorSparkle : EffectBase
         HueRedistribution = 1f,
     };
 
-    /// <summary>Authored minimum for the activation-wide solid hue used by every Drop sparkle.</summary>
-    private const float SyncDropHueMin = 0f;
+    /// <summary>Authored Drop approach window over which palette births and beat glints starve.</summary>
+    private const int SyncDropStarveBeats = 4;
 
-    /// <summary>Authored maximum for the activation-wide solid hue used by every Drop sparkle.</summary>
-    private const float SyncDropHueMax = 1f;
+    /// <summary>Authored fraction of the Energy-tier rate retained at the end of the Drop approach.</summary>
+    private const float SyncDropStarveFloor = 0f;
 
-    /// <summary>Authored divisor that halves the number of generated sparkles during a Drop.</summary>
-    private const int SyncDropSparkleDivisor = 2;
+    /// <summary>Authored inclusive minimum glints fired on a Drop landing.</summary>
+    private const int SyncDropImpactGlintsMinInclusive = 200;
+
+    /// <summary>Authored exclusive maximum glints fired on a Drop landing.</summary>
+    private const int SyncDropImpactGlintsMaxExclusive = 300;
+
+    /// <summary>Authored Energy-tier birth-rate multiplier at the Drop landing.</summary>
+    private const float SyncDropFloodMultiplier = 3f;
+
+    /// <summary>Authored Drop recovery window over which birth rate and field fade return to normal.</summary>
+    private const int SyncDropRecoverBeats = 16;
+
+    /// <summary>Authored fraction of each Tile's distance from the floor retained at the Drop landing.</summary>
+    private const float SyncDropFadePerFrame = 0.99f;
 
     /// <summary>Authored chance that a newly generated Fill sparkle is born the Fill colour, tuned at the wall.</summary>
     private const float SyncFillWhiteChance = 0.75f;
@@ -222,7 +234,7 @@ public class ColorSparkle : EffectBase
         /// <summary>The Palette coordinate rolled when a turning sparkle was born.</summary>
         private float birthCoordinate;
 
-        /// <summary>The birth color held by a Drop, Fill-white, or Standalone glint sparkle.</summary>
+        /// <summary>The birth color held by a Fill-white or Standalone glint sparkle.</summary>
         private Color fixedColor;
 
         /// <summary>Fraction of the birth color's distance from the field floor still visible.</summary>
@@ -380,8 +392,14 @@ public class ColorSparkle : EffectBase
         FloorLevel = SyncFloorLevel,
         FadePerFrame = SyncFadePerFrame,
         PaletteConditioning = SyncPaletteConditioning,
-        DropHue = new FloatRange(SyncDropHueMin, SyncDropHueMax),
-        DropSparkleDivisor = SyncDropSparkleDivisor,
+        DropStarveBeats = SyncDropStarveBeats,
+        DropStarveFloor = SyncDropStarveFloor,
+        DropImpactGlints = new IntRange(
+            SyncDropImpactGlintsMinInclusive,
+            SyncDropImpactGlintsMaxExclusive),
+        DropFloodMultiplier = SyncDropFloodMultiplier,
+        DropRecoverBeats = SyncDropRecoverBeats,
+        DropFadePerFrame = SyncDropFadePerFrame,
         FillWhiteChance = SyncFillWhiteChance,
         FillSparkleColor = SyncFillSparkleColor,
         WaveformName = SyncWaveformName,
@@ -435,14 +453,20 @@ public class ColorSparkle : EffectBase
     /// <summary>Levels-drive band reading on the latest Synced frame for the debug display.</summary>
     private float levelsDriveReading;
 
-    /// <summary>Count fired by the most recent qualifying beat for the debug display.</summary>
+    /// <summary>Count fired by the most recent beat or Drop-impact glint burst for the debug display.</summary>
     private int lastGlintCount;
 
     /// <summary>Whether the previous rendered frame used Synced Mode.</summary>
     private bool wasSynced;
 
-    /// <summary>The activation-wide solid hue used by every sparkle during a Drop.</summary>
-    private float dropHue;
+    /// <summary>Whether Drop was active on the preceding frame, retained for local onset detection.</summary>
+    private bool previousDropActive;
+
+    /// <summary>Live Drop approach Build envelope shown by the debug display.</summary>
+    private float dropStarveEnvelope;
+
+    /// <summary>Live Drop recovery Decay envelope shown by the debug display.</summary>
+    private float dropRecoverEnvelope;
 
     /// <summary>
     /// ColorSparkle's fading sparkle field accents Fill and Drop moments, and its sparkle rate and
@@ -456,8 +480,8 @@ public class ColorSparkle : EffectBase
         Repertoire.EnergyHigh;
 
     /// <summary>
-    /// Returns the activation Palette and coordinate policy, live Energy, Levels drive, and most
-    /// recent glint count for the Controller debug display.
+    /// Returns the activation Palette and coordinate policy, live Energy, Levels drive, Drop
+    /// envelopes, and most recent glint count for the Controller debug display.
     /// </summary>
     public override string DebugText()
     {
@@ -469,6 +493,7 @@ public class ColorSparkle : EffectBase
             : "scatter";
         return $"ColorSparkle\n{paletteName} Palette {coordinate}\n" +
             $"ENERGY {liveEnergy?.ToString() ?? "—"} LEVEL {levelsDriveReading:0.00}\n" +
+            $"DROP STARVE {dropStarveEnvelope:0.00} RECOVER {dropRecoverEnvelope:0.00}\n" +
             $"GLINTS {lastGlintCount}";
     }
 
@@ -498,7 +523,6 @@ public class ColorSparkle : EffectBase
         activationPalette = APalette;
         RollActivationPalette(confettiChance, confettiPaletteSize);
         RollCoordinatePolicy(coordinateRange);
-        dropHue = Random.Range(SyncSettings.DropHue.Min, SyncSettings.DropHue.Max);
 
         string requestedWaveformName = SyncSettings.WaveformName;
         waveform = waveforms.Named(requestedWaveformName);
@@ -510,6 +534,13 @@ public class ColorSparkle : EffectBase
         lastGlintBeat = null;
         lastGlintCount = 0;
         wasSynced = isSynced;
+        previousDropActive = beatManager.Drop.Active;
+        dropStarveEnvelope = isSynced
+            ? beatManager.Drop.Before.Build(SyncSettings.DropStarveBeats)
+            : 0f;
+        dropRecoverEnvelope = isSynced
+            ? beatManager.Drop.In.Decay(SyncSettings.DropRecoverBeats)
+            : 0f;
         liveEnergy = isSynced ? beatManager.Energy.Level : null;
         levelsDriveReading = isSynced
             ? ReadLevel(SyncSettings.LevelsDriveBand, SyncSettings.LevelsDriveForm)
@@ -608,7 +639,8 @@ public class ColorSparkle : EffectBase
 
     /// <summary>
     /// Renders one frame into this effect's 900-color Buffer using the active mode's live palette
-    /// conditioning and picture settings. Drop and Fill keep their existing color and count overrides.
+    /// conditioning and picture settings. In Synced Mode, Drop starves then floods the Palette
+    /// field while Fill keeps its white birth rate independent of the Drop approach.
     /// </summary>
     public override void Draw()
     {
@@ -629,6 +661,27 @@ public class ColorSparkle : EffectBase
             wasSynced = isSynced;
         }
 
+        bool dropActive = false;
+        bool dropStarted = false;
+        bool fillActive = false;
+        dropStarveEnvelope = 0f;
+        dropRecoverEnvelope = 0f;
+        if (isSynced)
+        {
+            dropActive = beatManager.Drop.Active;
+            dropStarted = dropActive && !previousDropActive;
+            previousDropActive = dropActive;
+            fillActive = beatManager.Fill.Active;
+            dropStarveEnvelope = beatManager.Drop.Before.Build(
+                SyncSettings.DropStarveBeats);
+            dropRecoverEnvelope = beatManager.Drop.In.Decay(
+                SyncSettings.DropRecoverBeats);
+        }
+        else
+        {
+            previousDropActive = false;
+        }
+
         FloatRange coordinateRange = isSynced
             ? SyncSettings.CoordinateRange
             : standaloneSettings.CoordinateRange;
@@ -636,7 +689,10 @@ public class ColorSparkle : EffectBase
             ? SyncSettings.FloorLevel
             : standaloneSettings.FloorLevel;
         float fadePerFrame = isSynced
-            ? SyncSettings.FadePerFrame
+            ? Mathf.Lerp(
+                SyncSettings.FadePerFrame,
+                SyncSettings.DropFadePerFrame,
+                dropRecoverEnvelope)
             : standaloneSettings.FadePerFrame;
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
@@ -649,6 +705,7 @@ public class ColorSparkle : EffectBase
         float turnProgress = waveform.TroughToTroughProgress;
 
         float sparklesPerSecond;
+        float fillWhiteChance = 0f;
         if (isSynced)
         {
             Energy energy = beatManager.Energy.Level.Value;
@@ -656,10 +713,19 @@ public class ColorSparkle : EffectBase
             levelsDriveReading = ReadLevel(
                 SyncSettings.LevelsDriveBand,
                 SyncSettings.LevelsDriveForm);
-            sparklesPerSecond = ResolveSyncedSparklesPerSecond(
+            float tierSparklesPerSecond = ResolveTierSparklesPerSecond(
                 energy,
                 beatManager.Timing.Beat.Value,
                 levelsDriveReading);
+            sparklesPerSecond = ResolveSyncedSparklesPerSecond(
+                tierSparklesPerSecond,
+                dropStarveEnvelope,
+                SyncSettings.DropStarveFloor,
+                fillActive,
+                SyncSettings.FillWhiteChance,
+                dropRecoverEnvelope,
+                SyncSettings.DropFloodMultiplier,
+                out fillWhiteChance);
         }
         else
         {
@@ -680,24 +746,12 @@ public class ColorSparkle : EffectBase
         int count = Mathf.FloorToInt(sparkleCarry);
         sparkleCarry -= count;
 
-        bool dropActive = beatManager.Drop.Active;
-        if (dropActive)
-        {
-            count /= SyncSettings.DropSparkleDivisor;
-        }
-
-        bool fillActive = beatManager.Fill.Active;
-        Color dropColor = dropActive
-            ? Color.HSVToRGB(dropHue, 1f, 1f)
-            : default;
         for (int i = 0; i < count; i++)
         {
-            bool fillWhite = fillActive && Random.value < SyncSettings.FillWhiteChance;
-            if (dropActive || fillWhite)
+            bool fillWhite = fillActive && Random.value < fillWhiteChance;
+            if (fillWhite)
             {
-                SpawnFixedSparkle(
-                    fillWhite ? SyncSettings.FillSparkleColor : dropColor,
-                    turnProgress);
+                SpawnFixedSparkle(SyncSettings.FillSparkleColor, turnProgress);
                 continue;
             }
 
@@ -718,7 +772,16 @@ public class ColorSparkle : EffectBase
 
         if (isSynced)
         {
-            FireSyncedGlints(coordinateRange);
+            if (dropStarted)
+            {
+                int impactCount = Random.Range(
+                    SyncSettings.DropImpactGlints.MinInclusive,
+                    SyncSettings.DropImpactGlints.MaxExclusive);
+                lastGlintCount = impactCount;
+                FireGlints(impactCount, coordinateRange);
+            }
+
+            FireSyncedGlints(coordinateRange, dropStarveEnvelope);
         }
     }
 
@@ -768,7 +831,7 @@ public class ColorSparkle : EffectBase
     /// <param name="absoluteBeat">The current absolute beat from the Data Surface.</param>
     /// <param name="driveReading">The selected Levels-drive band reading.</param>
     /// <returns>The sparkle birth rate for this frame.</returns>
-    private float ResolveSyncedSparklesPerSecond(
+    private float ResolveTierSparklesPerSecond(
         Energy energy,
         int absoluteBeat,
         float driveReading)
@@ -788,11 +851,51 @@ public class ColorSparkle : EffectBase
         return randomSparklesPerSecond;
     }
 
+    /// <summary>
+    /// Resolves the Synced birth rate after the Drop approach, Fill-white exemption, and active
+    /// Drop recovery are applied to an already placed Energy-tier rate.
+    /// </summary>
+    /// <param name="tierRate">The rate already placed within the current Energy tier.</param>
+    /// <param name="starveEnvelope">The effective Drop approach Build envelope.</param>
+    /// <param name="starveFloor">Fraction of palette births retained at full starvation.</param>
+    /// <param name="fillActive">Whether Fill-white births are currently eligible.</param>
+    /// <param name="fillWhiteChance">Authored white share of the unstarved birth rate.</param>
+    /// <param name="recoverEnvelope">The active Drop recovery Decay envelope.</param>
+    /// <param name="floodMultiplier">Birth-rate multiplier at the Drop landing.</param>
+    /// <param name="resolvedFillWhiteChance">
+    /// White probability among resolved births, raised during starvation so white births retain
+    /// their full unstarved rate.
+    /// </param>
+    /// <returns>The total sparkle birth rate for the frame.</returns>
+    internal static float ResolveSyncedSparklesPerSecond(
+        float tierRate,
+        float starveEnvelope,
+        float starveFloor,
+        bool fillActive,
+        float fillWhiteChance,
+        float recoverEnvelope,
+        float floodMultiplier,
+        out float resolvedFillWhiteChance)
+    {
+        resolvedFillWhiteChance = fillWhiteChance;
+        float starveScale = Mathf.Lerp(1f, starveFloor, starveEnvelope);
+        float resolvedRate = tierRate * starveScale;
+        if (fillActive && starveEnvelope > 0f)
+        {
+            float whiteRate = tierRate * fillWhiteChance;
+            float paletteRate = tierRate * (1f - fillWhiteChance) * starveScale;
+            resolvedRate = whiteRate + paletteRate;
+            resolvedFillWhiteChance = whiteRate / resolvedRate;
+        }
+
+        return resolvedRate * Mathf.Lerp(1f, floodMultiplier, recoverEnvelope);
+    }
+
     /// <summary>Places or rolls the current Energy state's glint count for one qualifying beat.</summary>
     /// <param name="energy">The current Energy state.</param>
     /// <param name="driveReading">The selected Levels-drive band reading.</param>
     /// <returns>The number of glints to fire on the beat.</returns>
-    private int ResolveGlintCount(Energy energy, float driveReading)
+    private int ResolveTierGlintCount(Energy energy, float driveReading)
     {
         IntRange range = GlintCountRange(energy);
         return SyncSettings.LevelsDrive
@@ -803,12 +906,26 @@ public class ColorSparkle : EffectBase
             : Random.Range(range.MinInclusive, range.MaxExclusive);
     }
 
+    /// <summary>Scales one placed Energy-tier glint count across the Drop approach.</summary>
+    /// <param name="tierCount">The count already placed within the current Energy tier.</param>
+    /// <param name="starveEnvelope">The effective Drop approach Build envelope.</param>
+    /// <param name="starveFloor">Fraction of the tier count retained at full starvation.</param>
+    /// <returns>The beat-fired glint count for this frame.</returns>
+    internal static int ResolveGlintCount(
+        int tierCount,
+        float starveEnvelope,
+        float starveFloor) =>
+        Mathf.RoundToInt(tierCount * Mathf.Lerp(1f, starveFloor, starveEnvelope));
+
     /// <summary>
     /// Fires every glint for one qualifying beat in the current frame, with independent Palette,
     /// luminance, and beat-fraction fade rolls.
     /// </summary>
     /// <param name="coordinateRange">Live cyclic palette coordinate endpoints for glint rolls.</param>
-    private void FireSyncedGlints(FloatRange coordinateRange)
+    /// <param name="starveEnvelope">Effective Drop approach Build applied to the tier count.</param>
+    private void FireSyncedGlints(
+        FloatRange coordinateRange,
+        float starveEnvelope)
     {
         int absoluteBeat = beatManager.Timing.Beat.Value;
         int beatInBar = beatManager.Timing.BeatInBar.Value;
@@ -825,8 +942,25 @@ public class ColorSparkle : EffectBase
             return;
         }
 
-        int count = ResolveGlintCount(beatManager.Energy.Level.Value, levelsDriveReading);
+        int tierCount = ResolveTierGlintCount(
+            beatManager.Energy.Level.Value,
+            levelsDriveReading);
+        int count = ResolveGlintCount(
+            tierCount,
+            starveEnvelope,
+            SyncSettings.DropStarveFloor);
         lastGlintCount = count;
+        FireGlints(count, coordinateRange);
+    }
+
+    /// <summary>
+    /// Fires one glint burst through the shared random Tile, Palette, luminance, and beat-fraction
+    /// fade path, so beat and Drop-impact glints have the same per-glint behavior.
+    /// </summary>
+    /// <param name="count">Number of glints to fire in this frame.</param>
+    /// <param name="coordinateRange">Live cyclic palette coordinate endpoints for glint rolls.</param>
+    private void FireGlints(int count, FloatRange coordinateRange)
+    {
         float beatSeconds = beatManager.Timing.BeatAverageMilliseconds.Value / 1000f;
         for (int i = 0; i < count; i++)
         {
@@ -968,7 +1102,7 @@ public class ColorSparkle : EffectBase
             turnProgress);
     }
 
-    /// <summary>Selects one random Tile for a fixed Drop or Fill-white field sparkle.</summary>
+    /// <summary>Selects one random Tile for a fixed Fill-white field sparkle.</summary>
     /// <param name="color">The fixed birth color.</param>
     /// <param name="turnProgress">Current trough-to-trough progress, ignored by fixed sparkles.</param>
     private void SpawnFixedSparkle(Color color, float turnProgress)
@@ -1173,7 +1307,7 @@ public sealed class ColorSparkleStandaloneSettings
 
 /// <summary>
 /// The serializable value shape shared by ColorSparkle's Sync Defaults and saved Sync Settings for
-/// its Palette field, musical response, and retained Drop and Fill controls.
+/// its Palette field and complete Energy, Levels, Drop, and Fill response.
 /// </summary>
 [Serializable]
 public sealed class ColorSparkleSyncSettings
@@ -1255,11 +1389,24 @@ public sealed class ColorSparkleSyncSettings
     /// </summary>
     public PaletteConditioning PaletteConditioning;
 
-    /// <summary>Per-activation range for the solid hue used by every Drop sparkle.</summary>
-    public FloatRange DropHue;
+    /// <summary>Whole-beat Drop approach window over which palette births and beat glints starve.</summary>
+    [Header("Drop")]
+    [Range(1, 16)] public int DropStarveBeats;
 
-    /// <summary>Divisor applied to the generated sparkle count during a Drop.</summary>
-    [Min(1)] public int DropSparkleDivisor;
+    /// <summary>Fraction of the Energy-tier palette birth rate and beat-glint count retained at full starvation.</summary>
+    [Range(0f, 1f)] public float DropStarveFloor;
+
+    /// <summary>Inclusive-minimum, exclusive-maximum glint-count range fired on a Drop landing.</summary>
+    public IntRange DropImpactGlints;
+
+    /// <summary>Energy-tier birth-rate multiplier at the Drop landing; one disables the flood.</summary>
+    [Range(1f, 8f)] public float DropFloodMultiplier;
+
+    /// <summary>Whole-beat window over which Drop birth rate and field fade recover to normal.</summary>
+    [Range(1, 64)] public int DropRecoverBeats;
+
+    /// <summary>Fraction of each Tile's distance from the floor retained at the Drop landing.</summary>
+    [Range(0.9f, 0.999f)] public float DropFadePerFrame;
 
     /// <summary>Chance that a newly generated Fill sparkle is born <see cref="FillSparkleColor"/> instead of its Palette colour.</summary>
     [Header("Fill")]
@@ -1278,7 +1425,7 @@ public sealed class ColorSparkleSyncSettings
 
     /// <summary>
     /// Copies every ColorSparkle Sync Setting, including range endpoints, Rails, palette
-    /// conditioning, and the existing Drop and Fill controls.
+    /// conditioning, and the complete Drop and Fill controls.
     /// </summary>
     /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(ColorSparkleSyncSettings source)
@@ -1313,12 +1460,12 @@ public sealed class ColorSparkleSyncSettings
         FloorLevel = source.FloorLevel;
         FadePerFrame = source.FadePerFrame;
         PaletteConditioning = source.PaletteConditioning;
-        DropHue = new FloatRange(
-            source.DropHue.Min,
-            source.DropHue.Max,
-            source.DropHue.LowRail,
-            source.DropHue.HighRail);
-        DropSparkleDivisor = source.DropSparkleDivisor;
+        DropStarveBeats = source.DropStarveBeats;
+        DropStarveFloor = source.DropStarveFloor;
+        DropImpactGlints = Copy(source.DropImpactGlints);
+        DropFloodMultiplier = source.DropFloodMultiplier;
+        DropRecoverBeats = source.DropRecoverBeats;
+        DropFadePerFrame = source.DropFadePerFrame;
         FillWhiteChance = source.FillWhiteChance;
         FillSparkleColor = source.FillSparkleColor;
         WaveformName = source.WaveformName;

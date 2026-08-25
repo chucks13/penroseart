@@ -79,12 +79,16 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
-    DropHue:
-      Min: 0
-      Max: 1
-      LowRail: 0
-      HighRail: 1
-    DropSparkleDivisor: 2
+    DropStarveBeats: 4
+    DropStarveFloor: 0
+    DropImpactGlints:
+      MinInclusive: 200
+      MaxExclusive: 300
+      LowRail: 200
+      HighRail: 300
+    DropFloodMultiplier: 3
+    DropRecoverBeats: 16
+    DropFadePerFrame: 0.99
     FillWhiteChance: 0.75
     FillSparkleColor: {r: 1, g: 1, b: 1, a: 1}
     WaveformName: beats 2 and 4

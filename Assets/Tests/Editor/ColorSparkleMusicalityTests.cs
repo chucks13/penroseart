@@ -131,4 +131,96 @@ public sealed class ColorSparkleMusicalityTests
             Is.True);
         Assert.That(effect.buffer[0], Is.EqualTo(Color.green));
     }
+
+    /// <summary>
+    /// With both Drop envelopes at rest, rate resolution returns the placed Energy-tier rate and
+    /// authored Fill-white probability exactly.
+    /// </summary>
+    [Test]
+    public void ColorSparkleDropResolutionAtRestLeavesBirthPlanUnchanged()
+    {
+        const float tierRate = 123.5f;
+        const float fillWhiteChance = 0.37f;
+
+        float resolvedRate = ColorSparkle.ResolveSyncedSparklesPerSecond(
+            tierRate,
+            0f,
+            0.2f,
+            true,
+            fillWhiteChance,
+            0f,
+            5f,
+            out float resolvedFillWhiteChance);
+
+        Assert.That(resolvedRate, Is.EqualTo(tierRate));
+        Assert.That(resolvedFillWhiteChance, Is.EqualTo(fillWhiteChance));
+    }
+
+    /// <summary>
+    /// Drop starvation scales only the Palette share of a live Fill birth plan, keeping its white
+    /// births at the unstarved rate while the total field rate falls.
+    /// </summary>
+    [Test]
+    public void ColorSparkleDropStarveKeepsFillWhiteBirthRateFull()
+    {
+        float resolvedRate = ColorSparkle.ResolveSyncedSparklesPerSecond(
+            120f,
+            0.5f,
+            0f,
+            true,
+            0.25f,
+            0f,
+            5f,
+            out float resolvedFillWhiteChance);
+
+        Assert.That(resolvedRate, Is.EqualTo(75f).Within(0.0001f));
+        Assert.That(
+            resolvedRate * resolvedFillWhiteChance,
+            Is.EqualTo(30f).Within(0.0001f));
+        Assert.That(
+            resolvedRate * (1f - resolvedFillWhiteChance),
+            Is.EqualTo(45f).Within(0.0001f));
+    }
+
+    /// <summary>
+    /// Drop recovery places the birth rate at the flood multiple on landing and halfway back to
+    /// the Energy-tier rate at a half-decayed envelope.
+    /// </summary>
+    [Test]
+    public void ColorSparkleDropRecoveryEasesFloodRateToTierRate()
+    {
+        float landingRate = ColorSparkle.ResolveSyncedSparklesPerSecond(
+            80f,
+            0f,
+            0f,
+            false,
+            0.25f,
+            1f,
+            4f,
+            out _);
+        float halfRecoveryRate = ColorSparkle.ResolveSyncedSparklesPerSecond(
+            80f,
+            0f,
+            0f,
+            false,
+            0.25f,
+            0.5f,
+            4f,
+            out _);
+
+        Assert.That(landingRate, Is.EqualTo(320f).Within(0.0001f));
+        Assert.That(halfRecoveryRate, Is.EqualTo(200f).Within(0.0001f));
+    }
+
+    /// <summary>
+    /// Beat-glint count resolution applies the same Drop-starve fraction as Palette births and
+    /// reaches the configured floor fraction at the end of the approach.
+    /// </summary>
+    [Test]
+    public void ColorSparkleDropStarveScalesBeatGlintCountToFloor()
+    {
+        Assert.That(ColorSparkle.ResolveGlintCount(80, 0f, 0.25f), Is.EqualTo(80));
+        Assert.That(ColorSparkle.ResolveGlintCount(80, 0.5f, 0f), Is.EqualTo(40));
+        Assert.That(ColorSparkle.ResolveGlintCount(80, 1f, 0.25f), Is.EqualTo(20));
+    }
 }
