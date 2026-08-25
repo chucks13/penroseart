@@ -408,6 +408,7 @@ public sealed class EffectSyncSettingsTests
                 typeof(ColorSparkle),
                 TempAssetFolder);
         asset.Settings.ConfettiChance = 0.17f;
+        asset.Settings.SingleCoordinateChance = 0.18f;
         asset.Settings.ConfettiPaletteSize = 18;
         asset.Settings.CoordinateRange = new FloatRange(0.21f, 0.22f, 0.2f, 0.23f);
         asset.Settings.GlintChance = 0.024f;
@@ -433,6 +434,9 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = ColorSparkle.StandaloneDefaults;
         Assert.That(asset.Settings.ConfettiChance, Is.EqualTo(defaults.ConfettiChance));
+        Assert.That(
+            asset.Settings.SingleCoordinateChance,
+            Is.EqualTo(defaults.SingleCoordinateChance));
         Assert.That(asset.Settings.ConfettiPaletteSize, Is.EqualTo(defaults.ConfettiPaletteSize));
         AssertFloatRangeEqual(asset.Settings.CoordinateRange, defaults.CoordinateRange);
         Assert.That(asset.Settings.GlintChance, Is.EqualTo(defaults.GlintChance));
@@ -1304,6 +1308,7 @@ public sealed class EffectSyncSettingsTests
                 typeof(ColorSparkle),
                 TempAssetFolder);
         asset.Settings.ConfettiChance = 0.41f;
+        asset.Settings.SingleCoordinateChance = 0.42f;
         asset.Settings.ConfettiPaletteSize = 42;
         asset.Settings.CoordinateRange = new FloatRange(0.45f, 0.46f, 0.44f, 0.47f);
         asset.Settings.GridPaletteChangeChance = 0.66f;
@@ -1336,7 +1341,7 @@ public sealed class EffectSyncSettingsTests
         };
         asset.Settings.DropStarveBeats = 7;
         asset.Settings.DropStarveFloor = 0.62f;
-        asset.Settings.DropImpactGlints = new IntRange(63, 64, 62, 65);
+        asset.Settings.DropLandingGlints = new IntRange(63, 64, 62, 65);
         asset.Settings.DropFloodMultiplier = 4.5f;
         asset.Settings.DropRecoverBeats = 19;
         asset.Settings.DropFadePerFrame = 0.94f;
@@ -1348,6 +1353,9 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = ColorSparkle.SyncDefaults;
         Assert.That(asset.Settings.ConfettiChance, Is.EqualTo(defaults.ConfettiChance));
+        Assert.That(
+            asset.Settings.SingleCoordinateChance,
+            Is.EqualTo(defaults.SingleCoordinateChance));
         Assert.That(asset.Settings.ConfettiPaletteSize, Is.EqualTo(defaults.ConfettiPaletteSize));
         AssertFloatRangeEqual(asset.Settings.CoordinateRange, defaults.CoordinateRange);
         Assert.That(
@@ -1380,7 +1388,7 @@ public sealed class EffectSyncSettingsTests
             defaults.PaletteConditioning);
         Assert.That(asset.Settings.DropStarveBeats, Is.EqualTo(defaults.DropStarveBeats));
         Assert.That(asset.Settings.DropStarveFloor, Is.EqualTo(defaults.DropStarveFloor));
-        AssertIntRangeEqual(asset.Settings.DropImpactGlints, defaults.DropImpactGlints);
+        AssertIntRangeEqual(asset.Settings.DropLandingGlints, defaults.DropLandingGlints);
         Assert.That(
             asset.Settings.DropFloodMultiplier,
             Is.EqualTo(defaults.DropFloodMultiplier));

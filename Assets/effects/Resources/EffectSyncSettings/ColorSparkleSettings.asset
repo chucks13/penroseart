@@ -15,6 +15,7 @@ MonoBehaviour:
   effectTypeName: ColorSparkle
   settings:
     ConfettiChance: 0.125
+    SingleCoordinateChance: 0.5
     ConfettiPaletteSize: 16
     CoordinateRange:
       Min: 0
@@ -81,7 +82,7 @@ MonoBehaviour:
       HueRedistribution: 1
     DropStarveBeats: 8
     DropStarveFloor: 0
-    DropImpactGlints:
+    DropLandingGlints:
       MinInclusive: 200
       MaxExclusive: 300
       LowRail: 200

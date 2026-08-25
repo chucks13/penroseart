@@ -14,8 +14,11 @@ public class ColorSparkle : EffectBase
 {
     // Standalone Defaults
 
-    /// <summary>Authored chance that an activation uses a randomized confetti Palette in Standalone Mode, tuned at the wall.</summary>
+    /// <summary>Authored chance that an activation uses a randomized confetti Palette in Standalone Mode.</summary>
     private const float StandaloneConfettiChance = 0.125f;
+
+    /// <summary>Authored chance that an activation holds one palette coordinate for every sparkle instead of scattering across the window.</summary>
+    private const float StandaloneSingleCoordinateChance = 0.5f;
 
     /// <summary>Authored number of sorted random hues in a Standalone confetti Palette.</summary>
     private const int StandaloneConfettiPaletteSize = 16;
@@ -40,8 +43,8 @@ public class ColorSparkle : EffectBase
 
     /// <summary>
     /// Authored fraction of each Tile's distance from the field floor retained per Buffer frame,
-    /// tuned at the wall. The 0.98 Rail ceiling preserves the original lifetime; tuning can only
-    /// shorten it.
+    /// with a 0.98 Rail ceiling that bounds the slowest fade so tuning can only shorten the
+    /// sparkle lifetime.
     /// </summary>
     private const float StandaloneFadePerFrame = 0.975f;
 
@@ -63,8 +66,11 @@ public class ColorSparkle : EffectBase
 
     // Sync Defaults
 
-    /// <summary>Authored chance that an activation uses a randomized confetti Palette in Synced Mode, tuned at the wall.</summary>
+    /// <summary>Authored chance that an activation uses a randomized confetti Palette in Synced Mode.</summary>
     private const float SyncConfettiChance = 0.125f;
+
+    /// <summary>Authored chance that an activation holds one palette coordinate for every sparkle instead of scattering across the window.</summary>
+    private const float SyncSingleCoordinateChance = 0.5f;
 
     /// <summary>Authored number of sorted random hues in a Synced confetti Palette.</summary>
     private const int SyncConfettiPaletteSize = 16;
@@ -73,53 +79,53 @@ public class ColorSparkle : EffectBase
     private const float SyncCoordinateMin = 0f;
 
     /// <summary>
-    /// Authored maximum cyclic palette coordinate for Synced palette variants, tuned at the wall to
-    /// a narrow window. A scatter over the whole palette is invariant under the 2-and-4 turn (every
+    /// Authored maximum cyclic palette coordinate for Synced palette variants. A scatter over the
+    /// whole palette is invariant under the 2-and-4 turn (every
     /// Tile changes colour, the field does not), so the window is what lets the turn read as the
     /// field moving through the palette as one band.
     /// </summary>
     private const float SyncCoordinateMax = 0.15f;
 
-    /// <summary>Authored upper Rail for the Synced coordinate window, stretched at the wall past the window itself.</summary>
+    /// <summary>Authored upper Rail that lets tuning widen the Synced coordinate window while keeping it narrower than the full Palette.</summary>
     private const float SyncCoordinateHighRail = 0.5f;
 
-    /// <summary>Authored chance that each Grid Boundary rolls the activation's Palette again, tuned at the wall to two in three.</summary>
+    /// <summary>Authored three-in-four chance that each Grid Boundary rolls the activation's Palette again, so long activations usually turn their colours over.</summary>
     private const float SyncGridPaletteChangeChance = 0.75f;
 
-    /// <summary>Authored minimum Synced sparkle rate while Energy is Low, tuned at the wall.</summary>
+    /// <summary>Authored minimum Synced sparkle rate while Energy is Low.</summary>
     private const float SyncLowSparklesPerSecondMin = 400f;
 
-    /// <summary>Authored maximum Synced sparkle rate while Energy is Low, tuned at the wall.</summary>
+    /// <summary>Authored maximum Synced sparkle rate while Energy is Low.</summary>
     private const float SyncLowSparklesPerSecondMax = 600f;
 
-    /// <summary>Authored minimum Synced sparkle rate while Energy is Mid, tuned at the wall.</summary>
+    /// <summary>Authored minimum Synced sparkle rate while Energy is Mid.</summary>
     private const float SyncMidSparklesPerSecondMin = 200f;
 
-    /// <summary>Authored maximum Synced sparkle rate while Energy is Mid, tuned at the wall.</summary>
+    /// <summary>Authored maximum Synced sparkle rate while Energy is Mid.</summary>
     private const float SyncMidSparklesPerSecondMax = 400f;
 
-    /// <summary>Authored minimum Synced sparkle rate while Energy is High, tuned at the wall.</summary>
+    /// <summary>Authored minimum Synced sparkle rate while Energy is High.</summary>
     private const float SyncHighSparklesPerSecondMin = 100f;
 
-    /// <summary>Authored maximum Synced sparkle rate while Energy is High, tuned at the wall.</summary>
+    /// <summary>Authored maximum Synced sparkle rate while Energy is High.</summary>
     private const float SyncHighSparklesPerSecondMax = 200f;
 
     /// <summary>Authored inclusive minimum glint count while Energy is Low.</summary>
     private const int SyncLowGlintsPerBeatMinInclusive = 10;
 
-    /// <summary>Authored exclusive maximum glint count while Energy is Low, tuned at the wall.</summary>
+    /// <summary>Authored exclusive maximum glint count while Energy is Low.</summary>
     private const int SyncLowGlintsPerBeatMaxExclusive = 50;
 
     /// <summary>Authored inclusive minimum glint count while Energy is Mid.</summary>
     private const int SyncMidGlintsPerBeatMinInclusive = 50;
 
-    /// <summary>Authored exclusive maximum glint count while Energy is Mid, tuned at the wall.</summary>
+    /// <summary>Authored exclusive maximum glint count while Energy is Mid.</summary>
     private const int SyncMidGlintsPerBeatMaxExclusive = 100;
 
-    /// <summary>Authored inclusive minimum glint count while Energy is High, tuned at the wall.</summary>
+    /// <summary>Authored inclusive minimum glint count while Energy is High.</summary>
     private const int SyncHighGlintsPerBeatMinInclusive = 100;
 
-    /// <summary>Authored exclusive maximum glint count while Energy is High, tuned at the wall.</summary>
+    /// <summary>Authored exclusive maximum glint count while Energy is High.</summary>
     private const int SyncHighGlintsPerBeatMaxExclusive = 200;
 
     /// <summary>Authored choice to place Synced rates and counts from a live Levels reading.</summary>
@@ -128,13 +134,13 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored Levels band that places Synced sparkle rates and glint counts.</summary>
     private const Band SyncLevelsDriveBand = Band.Low;
 
-    /// <summary>Authored Levels form that places Synced sparkle rates and glint counts, tuned at the wall.</summary>
+    /// <summary>Authored Levels form that places Synced sparkle rates and glint counts.</summary>
     private const LevelsForm SyncLevelsDriveForm = LevelsForm.Smoothed;
 
     /// <summary>Authored Levels band that gates beat-fired glints.</summary>
     private const Band SyncGlintGateBand = Band.Low;
 
-    /// <summary>Authored Levels form that gates beat-fired glints, tuned at the wall.</summary>
+    /// <summary>Authored Levels form that gates beat-fired glints.</summary>
     private const LevelsForm SyncGlintGateForm = LevelsForm.Normalized;
 
     /// <summary>Authored Levels threshold that a beat must exceed before glints fire.</summary>
@@ -152,7 +158,7 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored maximum fade duration for each Synced glint, in beat fractions.</summary>
     private const float SyncGlintFadeBeatsMax = 0.75f;
 
-    /// <summary>Authored upper Rail for the glint fade range, kept at the original one-beat ceiling the asset carries.</summary>
+    /// <summary>Authored upper Rail that caps each glint fade at one beat.</summary>
     private const float SyncGlintFadeBeatsHighRail = 1f;
 
     /// <summary>Authored scale applied to the darkest conditioned palette entry for the Synced field floor.</summary>
@@ -160,14 +166,14 @@ public class ColorSparkle : EffectBase
 
     /// <summary>
     /// Authored fraction of each Tile's distance from the field floor retained per Buffer frame,
-    /// tuned at the wall. The 0.98 Rail ceiling preserves the original lifetime; tuning can only
-    /// shorten it.
+    /// with a 0.98 Rail ceiling that bounds the slowest fade so tuning can only shorten the
+    /// sparkle lifetime.
     /// </summary>
     private const float SyncFadePerFrame = 0.975f;
 
     /// <summary>
     /// Sync palette conditioning is independently live so tuning cannot drift the Standalone look.
-    /// It starts from the Angles authored preset with the target luminance lifted at the wall to 0.5,
+    /// It starts from the Angles authored preset with a 0.5 target luminance,
     /// so sparkles and conditioned confetti sit brighter than the Standalone field.
     /// </summary>
     private static PaletteConditioning SyncPaletteConditioning => new()
@@ -189,10 +195,10 @@ public class ColorSparkle : EffectBase
     private const float SyncDropStarveFloor = 0f;
 
     /// <summary>Authored inclusive minimum glints fired on a Drop landing.</summary>
-    private const int SyncDropImpactGlintsMinInclusive = 200;
+    private const int SyncDropLandingGlintsMinInclusive = 200;
 
     /// <summary>Authored exclusive maximum glints fired on a Drop landing.</summary>
-    private const int SyncDropImpactGlintsMaxExclusive = 300;
+    private const int SyncDropLandingGlintsMaxExclusive = 300;
 
     /// <summary>Authored Energy-tier birth-rate multiplier at the Drop landing.</summary>
     private const float SyncDropFloodMultiplier = 4f;
@@ -203,7 +209,7 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored fraction of each Tile's distance from the floor retained at the Drop landing.</summary>
     private const float SyncDropFadePerFrame = 0.999f;
 
-    /// <summary>Authored chance that a newly generated Fill sparkle is born the Fill colour, tuned at the wall.</summary>
+    /// <summary>Authored chance that a newly generated Fill sparkle is born the Fill colour.</summary>
     private const float SyncFillWhiteChance = 0.75f;
 
     /// <summary>Authored colour a Fill sparkle is born with: white, so the Fill reads as a whitening of the field.</summary>
@@ -213,9 +219,6 @@ public class ColorSparkle : EffectBase
     private const string SyncWaveformName = "beats 2 and 4";
 
     // Runtime mechanism constants
-
-    /// <summary>Structural equal split between single and scatter coordinate policies.</summary>
-    private const float CoordinatePolicySplit = 0.5f;
 
     /// <summary>How an activation chooses the Palette coordinate for a sparkle or glint.</summary>
     private enum CoordinatePolicy
@@ -346,6 +349,7 @@ public class ColorSparkle : EffectBase
     public static ColorSparkleStandaloneSettings StandaloneDefaults => new()
     {
         ConfettiChance = StandaloneConfettiChance,
+        SingleCoordinateChance = StandaloneSingleCoordinateChance,
         ConfettiPaletteSize = StandaloneConfettiPaletteSize,
         CoordinateRange = new FloatRange(
             StandaloneCoordinateMin,
@@ -362,6 +366,7 @@ public class ColorSparkle : EffectBase
     public static ColorSparkleSyncSettings SyncDefaults => new()
     {
         ConfettiChance = SyncConfettiChance,
+        SingleCoordinateChance = SyncSingleCoordinateChance,
         ConfettiPaletteSize = SyncConfettiPaletteSize,
         CoordinateRange = new FloatRange(
             SyncCoordinateMin,
@@ -406,9 +411,9 @@ public class ColorSparkle : EffectBase
         PaletteConditioning = SyncPaletteConditioning,
         DropStarveBeats = SyncDropStarveBeats,
         DropStarveFloor = SyncDropStarveFloor,
-        DropImpactGlints = new IntRange(
-            SyncDropImpactGlintsMinInclusive,
-            SyncDropImpactGlintsMaxExclusive),
+        DropLandingGlints = new IntRange(
+            SyncDropLandingGlintsMinInclusive,
+            SyncDropLandingGlintsMaxExclusive),
         DropFloodMultiplier = SyncDropFloodMultiplier,
         DropRecoverBeats = SyncDropRecoverBeats,
         DropFadePerFrame = SyncDropFadePerFrame,
@@ -465,7 +470,7 @@ public class ColorSparkle : EffectBase
     /// <summary>Levels-drive band reading on the latest Synced frame for the debug display.</summary>
     private float levelsDriveReading;
 
-    /// <summary>Count fired by the most recent beat or Drop-impact glint burst for the debug display.</summary>
+    /// <summary>Count fired by the most recent beat or Drop-landing glint burst for the debug display.</summary>
     private int lastGlintCount;
 
     /// <summary>Whether the previous rendered frame used Synced Mode.</summary>
@@ -526,6 +531,9 @@ public class ColorSparkle : EffectBase
         float confettiChance = isSynced
             ? SyncSettings.ConfettiChance
             : standaloneSettings.ConfettiChance;
+        float singleCoordinateChance = isSynced
+            ? SyncSettings.SingleCoordinateChance
+            : standaloneSettings.SingleCoordinateChance;
         int confettiPaletteSize = isSynced
             ? SyncSettings.ConfettiPaletteSize
             : standaloneSettings.ConfettiPaletteSize;
@@ -534,7 +542,7 @@ public class ColorSparkle : EffectBase
             : standaloneSettings.CoordinateRange;
         activationPalette = APalette;
         RollActivationPalette(confettiChance, confettiPaletteSize);
-        RollCoordinatePolicy(coordinateRange);
+        RollCoordinatePolicy(singleCoordinateChance, coordinateRange);
 
         string requestedWaveformName = SyncSettings.WaveformName;
         waveform = waveforms.Named(requestedWaveformName);
@@ -547,12 +555,8 @@ public class ColorSparkle : EffectBase
         lastGlintCount = 0;
         wasSynced = isSynced;
         previousDropActive = beatManager.Drop.Active;
-        dropStarveEnvelope = isSynced
-            ? beatManager.Drop.Before.Build(SyncSettings.DropStarveBeats)
-            : 0f;
-        dropRecoverEnvelope = isSynced
-            ? beatManager.Drop.In.Decay(SyncSettings.DropRecoverBeats)
-            : 0f;
+        dropStarveEnvelope = beatManager.Drop.Before.Build(SyncSettings.DropStarveBeats);
+        dropRecoverEnvelope = beatManager.Drop.In.Decay(SyncSettings.DropRecoverBeats);
         liveEnergy = isSynced ? beatManager.Energy.Level : null;
         levelsDriveReading = isSynced
             ? ReadLevel(SyncSettings.LevelsDriveBand, SyncSettings.LevelsDriveForm)
@@ -629,11 +633,14 @@ public class ColorSparkle : EffectBase
     }
 
     /// <summary>Rolls the activation's single-or-scatter coordinate policy.</summary>
+    /// <param name="singleCoordinateChance">Chance that the activation holds one Palette coordinate.</param>
     /// <param name="coordinateRange">Active mode's cyclic Palette coordinate endpoints.</param>
-    private void RollCoordinatePolicy(FloatRange coordinateRange)
+    private void RollCoordinatePolicy(
+        float singleCoordinateChance,
+        FloatRange coordinateRange)
     {
         singlePaletteCoordinate = 0f;
-        coordinatePolicy = Random.value < CoordinatePolicySplit
+        coordinatePolicy = Random.value < singleCoordinateChance
             ? CoordinatePolicy.Single
             : CoordinatePolicy.Scatter;
         if (coordinatePolicy == CoordinatePolicy.Single)
@@ -787,11 +794,11 @@ public class ColorSparkle : EffectBase
         {
             if (dropStarted)
             {
-                int impactCount = Random.Range(
-                    sync.DropImpactGlints.MinInclusive,
-                    sync.DropImpactGlints.MaxExclusive);
-                lastGlintCount = impactCount;
-                FireGlints(impactCount, coordinateRange);
+                int landingCount = Random.Range(
+                    sync.DropLandingGlints.MinInclusive,
+                    sync.DropLandingGlints.MaxExclusive);
+                lastGlintCount = landingCount;
+                FireGlints(landingCount, coordinateRange);
             }
 
             FireSyncedGlints(coordinateRange, dropStarveEnvelope);
@@ -968,7 +975,7 @@ public class ColorSparkle : EffectBase
 
     /// <summary>
     /// Fires one glint burst through the shared random Tile, Palette, luminance, and beat-fraction
-    /// fade path, so beat and Drop-impact glints have the same per-glint behavior.
+    /// fade path, so beat and Drop-landing glints have the same per-glint behavior.
     /// </summary>
     /// <param name="count">Number of glints to fire in this frame.</param>
     /// <param name="coordinateRange">Live cyclic palette coordinate endpoints for glint rolls.</param>
@@ -1255,6 +1262,9 @@ public sealed class ColorSparkleStandaloneSettings
     /// <summary>Chance that the activation Roll selects a randomized confetti Palette.</summary>
     [Range(0f, 1f)] public float ConfettiChance;
 
+    /// <summary>Chance that the activation Roll holds one Palette coordinate for every sparkle instead of scattering across the window.</summary>
+    [Range(0f, 1f)] public float SingleCoordinateChance;
+
     /// <summary>Number of sorted random full-saturation, full-value HSV hues in a confetti Palette.</summary>
     public int ConfettiPaletteSize;
 
@@ -1275,7 +1285,7 @@ public sealed class ColorSparkleStandaloneSettings
 
     /// <summary>
     /// Fraction of each Tile's distance from the floor retained per Buffer frame. The upper Rail
-    /// preserves the original sparkle lifetime, so live tuning can only make the fade faster.
+    /// bounds the slowest fade, so live tuning can only shorten the sparkle lifetime.
     /// </summary>
     [Range(0.9f, 0.98f)] public float FadePerFrame;
 
@@ -1298,6 +1308,7 @@ public sealed class ColorSparkleStandaloneSettings
         }
 
         ConfettiChance = source.ConfettiChance;
+        SingleCoordinateChance = source.SingleCoordinateChance;
         ConfettiPaletteSize = source.ConfettiPaletteSize;
         CoordinateRange = new FloatRange(
             source.CoordinateRange.Min,
@@ -1322,6 +1333,9 @@ public sealed class ColorSparkleSyncSettings
 {
     /// <summary>Chance that the activation Roll selects a randomized confetti Palette.</summary>
     [Range(0f, 1f)] public float ConfettiChance;
+
+    /// <summary>Chance that the activation Roll holds one Palette coordinate for every sparkle instead of scattering across the window.</summary>
+    [Range(0f, 1f)] public float SingleCoordinateChance;
 
     /// <summary>Number of sorted random full-saturation, full-value HSV hues in a confetti Palette.</summary>
     public int ConfettiPaletteSize;
@@ -1387,7 +1401,7 @@ public sealed class ColorSparkleSyncSettings
 
     /// <summary>
     /// Fraction of each Tile's distance from the floor retained per Buffer frame. The upper Rail
-    /// preserves the original sparkle lifetime, so live tuning can only make the fade faster.
+    /// bounds the slowest fade, so live tuning can only shorten the sparkle lifetime.
     /// </summary>
     [Range(0.9f, 0.98f)] public float FadePerFrame;
 
@@ -1405,7 +1419,7 @@ public sealed class ColorSparkleSyncSettings
     [Range(0f, 1f)] public float DropStarveFloor;
 
     /// <summary>Inclusive-minimum, exclusive-maximum glint-count range fired on a Drop landing.</summary>
-    public IntRange DropImpactGlints;
+    public IntRange DropLandingGlints;
 
     /// <summary>Energy-tier birth-rate multiplier at the Drop landing; one disables the flood.</summary>
     [Range(1f, 8f)] public float DropFloodMultiplier;
@@ -1444,6 +1458,7 @@ public sealed class ColorSparkleSyncSettings
         }
 
         ConfettiChance = source.ConfettiChance;
+        SingleCoordinateChance = source.SingleCoordinateChance;
         ConfettiPaletteSize = source.ConfettiPaletteSize;
         CoordinateRange = new FloatRange(
             source.CoordinateRange.Min,
@@ -1470,7 +1485,7 @@ public sealed class ColorSparkleSyncSettings
         PaletteConditioning = source.PaletteConditioning;
         DropStarveBeats = source.DropStarveBeats;
         DropStarveFloor = source.DropStarveFloor;
-        DropImpactGlints = Copy(source.DropImpactGlints);
+        DropLandingGlints = Copy(source.DropLandingGlints);
         DropFloodMultiplier = source.DropFloodMultiplier;
         DropRecoverBeats = source.DropRecoverBeats;
         DropFadePerFrame = source.DropFadePerFrame;
