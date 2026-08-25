@@ -1,4 +1,4 @@
-// Verifies the Effect Settings seam: independent defaults, saved resolution, and restore behavior.
+// Verifies Effect Settings and the ColorSparkle musicality seams that carry state across frames.
 using System;
 using NUnit.Framework;
 using UnityEditor;
@@ -394,6 +394,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.FloorLevel, Is.EqualTo(second.FloorLevel));
         Assert.That(first.SparklesPerSecond, Is.EqualTo(second.SparklesPerSecond));
         Assert.That(first.FadePerFrame, Is.EqualTo(second.FadePerFrame));
+        Assert.That(first.HueBaseRate, Is.EqualTo(second.HueBaseRate));
+        Assert.That(first.HueBeatRate, Is.EqualTo(second.HueBeatRate));
+        Assert.That(first.HueCycleDrive, Is.EqualTo(second.HueCycleDrive));
         AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
     }
 
@@ -416,6 +419,9 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.FloorLevel = 0.28f;
         asset.Settings.SparklesPerSecond = 1234f;
         asset.Settings.FadePerFrame = 0.91f;
+        asset.Settings.HueBaseRate = 0.26f;
+        asset.Settings.HueBeatRate = 0.27f;
+        asset.Settings.HueCycleDrive = 0.28f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
         {
             TargetLuminance = 0.31f,
@@ -441,6 +447,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.FloorLevel, Is.EqualTo(defaults.FloorLevel));
         Assert.That(asset.Settings.SparklesPerSecond, Is.EqualTo(defaults.SparklesPerSecond));
         Assert.That(asset.Settings.FadePerFrame, Is.EqualTo(defaults.FadePerFrame));
+        Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
+        Assert.That(asset.Settings.HueBeatRate, Is.EqualTo(defaults.HueBeatRate));
+        Assert.That(asset.Settings.HueCycleDrive, Is.EqualTo(defaults.HueCycleDrive));
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,
             defaults.PaletteConditioning);
@@ -1306,10 +1315,21 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ConfettiChance = 0.41f;
         asset.Settings.PerSparkleHue = new FloatRange(0.42f, 0.43f, 0.41f, 0.44f);
         asset.Settings.CoordinateRange = new FloatRange(0.45f, 0.46f, 0.44f, 0.47f);
-        asset.Settings.GlintChance = 0.048f;
-        asset.Settings.GlintLuminance = 0.49f;
+        asset.Settings.LowSparklesPerSecond = new FloatRange(48f, 49f, 47f, 50f);
+        asset.Settings.MidSparklesPerSecond = new FloatRange(51f, 52f, 50f, 53f);
+        asset.Settings.HighSparklesPerSecond = new FloatRange(54f, 55f, 53f, 56f);
+        asset.Settings.LowGlintsPerBeat = new IntRange(57, 58, 56, 59);
+        asset.Settings.MidGlintsPerBeat = new IntRange(60, 61, 59, 62);
+        asset.Settings.HighGlintsPerBeat = new IntRange(63, 64, 62, 65);
+        asset.Settings.LevelsDrive = false;
+        asset.Settings.LevelsDriveBand = Band.High;
+        asset.Settings.LevelsDriveForm = LevelsForm.Peak;
+        asset.Settings.GlintGateBand = Band.Mid;
+        asset.Settings.GlintGateForm = LevelsForm.Normalized;
+        asset.Settings.GlintGateThreshold = 0.48f;
+        asset.Settings.GlintLuminance = new FloatRange(0.49f, 0.5f, 0.48f, 0.51f);
+        asset.Settings.GlintFadeBeats = new FloatRange(0.51f, 0.52f, 0.5f, 0.53f);
         asset.Settings.FloorLevel = 0.53f;
-        asset.Settings.SparklesPerSecond = 2345f;
         asset.Settings.FadePerFrame = 0.92f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
         {
@@ -1325,6 +1345,10 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DropHue = new FloatRange(0.62f, 0.63f, 0.61f, 0.64f);
         asset.Settings.DropSparkleDivisor = 7;
         asset.Settings.FillWhiteChance = 0.65f;
+        asset.Settings.WaveformName = "test waveform";
+        asset.Settings.HueBaseRate = 0.66f;
+        asset.Settings.HueBeatRate = 0.67f;
+        asset.Settings.HueCycleDrive = new FloatRange(0.68f, 0.69f, 0.67f, 0.7f);
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(ColorSparkle), TempAssetFolder);
 
@@ -1332,10 +1356,27 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ConfettiChance, Is.EqualTo(defaults.ConfettiChance));
         AssertFloatRangeEqual(asset.Settings.PerSparkleHue, defaults.PerSparkleHue);
         AssertFloatRangeEqual(asset.Settings.CoordinateRange, defaults.CoordinateRange);
-        Assert.That(asset.Settings.GlintChance, Is.EqualTo(defaults.GlintChance));
-        Assert.That(asset.Settings.GlintLuminance, Is.EqualTo(defaults.GlintLuminance));
+        AssertFloatRangeEqual(
+            asset.Settings.LowSparklesPerSecond,
+            defaults.LowSparklesPerSecond);
+        AssertFloatRangeEqual(
+            asset.Settings.MidSparklesPerSecond,
+            defaults.MidSparklesPerSecond);
+        AssertFloatRangeEqual(
+            asset.Settings.HighSparklesPerSecond,
+            defaults.HighSparklesPerSecond);
+        AssertIntRangeEqual(asset.Settings.LowGlintsPerBeat, defaults.LowGlintsPerBeat);
+        AssertIntRangeEqual(asset.Settings.MidGlintsPerBeat, defaults.MidGlintsPerBeat);
+        AssertIntRangeEqual(asset.Settings.HighGlintsPerBeat, defaults.HighGlintsPerBeat);
+        Assert.That(asset.Settings.LevelsDrive, Is.EqualTo(defaults.LevelsDrive));
+        Assert.That(asset.Settings.LevelsDriveBand, Is.EqualTo(defaults.LevelsDriveBand));
+        Assert.That(asset.Settings.LevelsDriveForm, Is.EqualTo(defaults.LevelsDriveForm));
+        Assert.That(asset.Settings.GlintGateBand, Is.EqualTo(defaults.GlintGateBand));
+        Assert.That(asset.Settings.GlintGateForm, Is.EqualTo(defaults.GlintGateForm));
+        Assert.That(asset.Settings.GlintGateThreshold, Is.EqualTo(defaults.GlintGateThreshold));
+        AssertFloatRangeEqual(asset.Settings.GlintLuminance, defaults.GlintLuminance);
+        AssertFloatRangeEqual(asset.Settings.GlintFadeBeats, defaults.GlintFadeBeats);
         Assert.That(asset.Settings.FloorLevel, Is.EqualTo(defaults.FloorLevel));
-        Assert.That(asset.Settings.SparklesPerSecond, Is.EqualTo(defaults.SparklesPerSecond));
         Assert.That(asset.Settings.FadePerFrame, Is.EqualTo(defaults.FadePerFrame));
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,
@@ -1343,6 +1384,10 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(asset.Settings.DropHue, defaults.DropHue);
         Assert.That(asset.Settings.DropSparkleDivisor, Is.EqualTo(defaults.DropSparkleDivisor));
         Assert.That(asset.Settings.FillWhiteChance, Is.EqualTo(defaults.FillWhiteChance));
+        Assert.That(asset.Settings.WaveformName, Is.EqualTo(defaults.WaveformName));
+        Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
+        Assert.That(asset.Settings.HueBeatRate, Is.EqualTo(defaults.HueBeatRate));
+        AssertFloatRangeEqual(asset.Settings.HueCycleDrive, defaults.HueCycleDrive);
     }
 
     /// <summary>
@@ -3045,6 +3090,62 @@ public sealed class EffectSyncSettingsTests
         AssetDatabase.DeleteAsset(TempAssetFolder);
         AssetDatabase.DeleteAsset(TempResourcesRoot);
         AssetDatabase.Refresh();
+    }
+}
+
+/// <summary>Verifies ColorSparkle's once-per-beat gate, glint clock, and protected-Tile seams.</summary>
+public sealed class ColorSparkleMusicalityTests
+{
+    /// <summary>
+    /// A qualifying multi-frame On Beat gate fires once on one absolute beat and can fire again
+    /// after the Data Surface advances to the next beat.
+    /// </summary>
+    [Test]
+    public void ColorSparkleGlintGateFiresOncePerBeat()
+    {
+        var effect = new ColorSparkle();
+
+        Assert.That(effect.TryBeginGlintBeat(42, true, 0.75f, 0.5f), Is.True);
+        Assert.That(effect.TryBeginGlintBeat(42, true, 0.75f, 0.5f), Is.False);
+        Assert.That(effect.TryBeginGlintBeat(43, true, 0.75f, 0.5f), Is.True);
+    }
+
+    /// <summary>
+    /// An active glint advances by its own seconds duration even when the field's retained-per-frame
+    /// fade would erase an ordinary sparkle.
+    /// </summary>
+    [Test]
+    public void ColorSparkleGlintFadeUsesItsOwnClock()
+    {
+        var effect = new ColorSparkle { buffer = new[] { Color.black } };
+        effect.ResetGlints();
+        effect.StartGlint(0, Color.white, 2f);
+
+        effect.FadeFieldAndGlints(Color.black, 0f, 0.5f, true);
+
+        Assert.That(effect.buffer[0].r, Is.EqualTo(0.75f).Within(0.0001f));
+        Assert.That(effect.buffer[0].g, Is.EqualTo(0.75f).Within(0.0001f));
+        Assert.That(effect.buffer[0].b, Is.EqualTo(0.75f).Within(0.0001f));
+    }
+
+    /// <summary>
+    /// A fading glint rejects a field sparkle on its Tile, then releases the Tile when its own fade
+    /// clock finishes.
+    /// </summary>
+    [Test]
+    public void ColorSparkleGlintProtectsItsTileUntilFadeFinishes()
+    {
+        var effect = new ColorSparkle { buffer = new[] { Color.black } };
+        effect.ResetGlints();
+        effect.StartGlint(0, Color.red, 1f);
+
+        Assert.That(effect.TryWriteSyncedSparkle(0, Color.green), Is.False);
+        Assert.That(effect.buffer[0], Is.EqualTo(Color.red));
+
+        effect.FadeFieldAndGlints(Color.black, 0f, 1f, true);
+
+        Assert.That(effect.TryWriteSyncedSparkle(0, Color.green), Is.True);
+        Assert.That(effect.buffer[0], Is.EqualTo(Color.green));
     }
 }
 

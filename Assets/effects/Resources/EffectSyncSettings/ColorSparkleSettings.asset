@@ -25,10 +25,53 @@ MonoBehaviour:
       Max: 1
       LowRail: 0
       HighRail: 1
-    GlintChance: 0.003
-    GlintLuminance: 0.8
+    LowSparklesPerSecond:
+      Min: 700
+      Max: 900
+      LowRail: 700
+      HighRail: 900
+    MidSparklesPerSecond:
+      Min: 400
+      Max: 600
+      LowRail: 400
+      HighRail: 600
+    HighSparklesPerSecond:
+      Min: 150
+      Max: 300
+      LowRail: 150
+      HighRail: 300
+    LowGlintsPerBeat:
+      MinInclusive: 3
+      MaxExclusive: 8
+      LowRail: 3
+      HighRail: 8
+    MidGlintsPerBeat:
+      MinInclusive: 10
+      MaxExclusive: 30
+      LowRail: 10
+      HighRail: 30
+    HighGlintsPerBeat:
+      MinInclusive: 60
+      MaxExclusive: 200
+      LowRail: 60
+      HighRail: 300
+    LevelsDrive: 1
+    LevelsDriveBand: 0
+    LevelsDriveForm: 1
+    GlintGateBand: 0
+    GlintGateForm: 1
+    GlintGateThreshold: 0.35
+    GlintLuminance:
+      Min: 0.6
+      Max: 0.9
+      LowRail: 0.6
+      HighRail: 0.9
+    GlintFadeBeats:
+      Min: 0.5
+      Max: 1
+      LowRail: 0.5
+      HighRail: 1
     FloorLevel: 0
-    SparklesPerSecond: 900
     FadePerFrame: 0.975
     PaletteConditioning:
       TargetLuminance: 0.4
@@ -46,3 +89,11 @@ MonoBehaviour:
       HighRail: 1
     DropSparkleDivisor: 2
     FillWhiteChance: 0.5
+    WaveformName: beats 2 and 4
+    HueBaseRate: 0.05
+    HueBeatRate: 2
+    HueCycleDrive:
+      Min: 0
+      Max: 2
+      LowRail: 0
+      HighRail: 2
