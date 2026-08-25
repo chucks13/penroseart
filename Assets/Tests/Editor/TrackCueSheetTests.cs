@@ -509,6 +509,31 @@ public sealed class TrackCueSheetTests
         Assert.That(landings, Does.Contain(265), "fill window ending at 265 is not an Anchor");
     }
 
+    /// <summary>
+    /// A drop that arrives as two consecutive Drop Phrases (the wire keeps rekordbox's boundary under the
+    /// drop, and only the first piece carries the landing) is one Drop Anchor, on the first piece; the
+    /// inner boundary is not a second drop, and the fill on the second piece is a Fill Anchor at that
+    /// piece's end boundary.
+    /// </summary>
+    [Test]
+    public void DropSplitIntoPiecesAnchorsOnceAndItsInnerFillIsAFillAnchor()
+    {
+        var track = Structure(
+            Phrase(1, 32, PhraseType.Intro),
+            Phrase(33, 96, PhraseType.Up),
+            Phrase(97, 112, PhraseType.Drop, drop: 97),           // first piece carries the landing
+            Phrase(113, 128, PhraseType.Drop, fill: 125),         // second piece: no landing, its own fill
+            Phrase(129, 192, PhraseType.Chorus),
+            Phrase(193, 224, PhraseType.Outro));
+
+        var sheet = TrackCueSheet.Build(track, MixedEffects(), MixedTransitions(), 1, 1);
+
+        var dropLandings = sheet.Anchors.Where(a => a.Kind == AnchorKind.Drop).Select(a => a.LandingBeat).ToArray();
+        var fillLandings = sheet.Anchors.Where(a => a.Kind == AnchorKind.Fill).Select(a => a.LandingBeat).ToArray();
+        Assert.That(dropLandings, Is.EqualTo(new[] { 97 }), "a split drop anchors once, on the piece carrying the landing");
+        Assert.That(fillLandings, Is.EqualTo(new[] { 129 }), "the fill on the second Drop piece anchors at that piece's end boundary");
+    }
+
     [Test]
     public void SameSeedRebuildsAnIdenticalSheet()
     {

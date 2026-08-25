@@ -175,7 +175,7 @@ A short musical transition in the tail of a Phrase — from its marked start bea
 _Avoid_: placing a Fill anywhere outside the Phrase tail; treating it as able to stop before the Phrase ends; expecting `Active` without the running 4-count — a Fill is a Synced Mode fact, and Standalone Mode never reports one.
 
 **Drop**:
-The climactic section of a track. A Drop is its own Phrase and starts on that Phrase's first beat. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, `Progress`, and nullable `Remaining` (the count of Drops remaining on the selected player's track), with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
+The climactic section of a track. A Drop begins on the first beat of the Phrase that carries its landing beat, and it can run across several consecutive Drop Phrases when the wire keeps rekordbox's boundaries under it; those Phrases are one Drop, and only the first carries the landing. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, `Progress`, and nullable `Remaining` (the count of Drops remaining on the selected player's track), with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
 _Avoid_: expecting `Active` without the running 4-count — a Drop is a Synced Mode fact, and Standalone Mode never reports one.
 
 **Energy**:
