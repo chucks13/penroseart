@@ -349,31 +349,34 @@ public class ColorSparkle : EffectBase
     public static ColorSparkleStandaloneSettings StandaloneDefaults => new()
     {
         ConfettiChance = StandaloneConfettiChance,
-        SingleCoordinateChance = StandaloneSingleCoordinateChance,
         ConfettiPaletteSize = StandaloneConfettiPaletteSize,
+        SingleCoordinateChance = StandaloneSingleCoordinateChance,
         CoordinateRange = new FloatRange(
             StandaloneCoordinateMin,
             StandaloneCoordinateMax),
+        PaletteConditioning = StandalonePaletteConditioning,
+        SparklesPerSecond = StandaloneSparklesPerSecond,
+        FloorLevel = StandaloneFloorLevel,
+        FadePerFrame = StandaloneFadePerFrame,
         GlintChance = StandaloneGlintChance,
         GlintLuminance = StandaloneGlintLuminance,
-        FloorLevel = StandaloneFloorLevel,
-        SparklesPerSecond = StandaloneSparklesPerSecond,
-        FadePerFrame = StandaloneFadePerFrame,
-        PaletteConditioning = StandalonePaletteConditioning,
     };
 
     /// <summary>Resolves a fresh copy of ColorSparkle's file-local Sync Defaults.</summary>
     public static ColorSparkleSyncSettings SyncDefaults => new()
     {
         ConfettiChance = SyncConfettiChance,
-        SingleCoordinateChance = SyncSingleCoordinateChance,
         ConfettiPaletteSize = SyncConfettiPaletteSize,
+        SingleCoordinateChance = SyncSingleCoordinateChance,
         CoordinateRange = new FloatRange(
             SyncCoordinateMin,
             SyncCoordinateMax,
             SyncCoordinateMin,
             SyncCoordinateHighRail),
         GridPaletteChangeChance = SyncGridPaletteChangeChance,
+        PaletteConditioning = SyncPaletteConditioning,
+        FloorLevel = SyncFloorLevel,
+        FadePerFrame = SyncFadePerFrame,
         LowSparklesPerSecond = new FloatRange(
             SyncLowSparklesPerSecondMin,
             SyncLowSparklesPerSecondMax),
@@ -406,9 +409,9 @@ public class ColorSparkle : EffectBase
             SyncGlintFadeBeatsMax,
             SyncGlintFadeBeatsMin,
             SyncGlintFadeBeatsHighRail),
-        FloorLevel = SyncFloorLevel,
-        FadePerFrame = SyncFadePerFrame,
-        PaletteConditioning = SyncPaletteConditioning,
+        WaveformName = SyncWaveformName,
+        FillWhiteChance = SyncFillWhiteChance,
+        FillSparkleColor = SyncFillSparkleColor,
         DropStarveBeats = SyncDropStarveBeats,
         DropStarveFloor = SyncDropStarveFloor,
         DropLandingGlints = new IntRange(
@@ -417,9 +420,6 @@ public class ColorSparkle : EffectBase
         DropFloodMultiplier = SyncDropFloodMultiplier,
         DropRecoverBeats = SyncDropRecoverBeats,
         DropFadePerFrame = SyncDropFadePerFrame,
-        FillWhiteChance = SyncFillWhiteChance,
-        FillSparkleColor = SyncFillSparkleColor,
-        WaveformName = SyncWaveformName,
     };
 
     /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
@@ -1260,28 +1260,30 @@ public class ColorSparkle : EffectBase
 public sealed class ColorSparkleStandaloneSettings
 {
     /// <summary>Chance that the activation Roll selects a randomized confetti Palette.</summary>
+    [Header("Palette")]
     [Range(0f, 1f)] public float ConfettiChance;
-
-    /// <summary>Chance that the activation Roll holds one Palette coordinate for every sparkle instead of scattering across the window.</summary>
-    [Range(0f, 1f)] public float SingleCoordinateChance;
 
     /// <summary>Number of sorted random full-saturation, full-value HSV hues in a confetti Palette.</summary>
     public int ConfettiPaletteSize;
 
+    /// <summary>Chance that the activation Roll holds one Palette coordinate for every sparkle instead of scattering across the window.</summary>
+    [Range(0f, 1f)] public float SingleCoordinateChance;
+
     /// <summary>Cyclic Palette coordinate range every coordinate roll draws from: the activation's held single coordinate, or each scatter sparkle's own.</summary>
     public FloatRange CoordinateRange;
 
-    /// <summary>Chance that a spawned sparkle is lifted to glint luminance on its Palette hue.</summary>
-    [Range(0f, 0.05f)] public float GlintChance;
+    /// <summary>
+    /// Live Effect-local palette conditioning for Standalone Mode, independently saved so tuning it
+    /// cannot drift the Synced look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
 
-    /// <summary>Relative luminance every glint flashes at.</summary>
-    [Range(0f, 1f)] public float GlintLuminance;
+    /// <summary>Uniform sparkle birth rate per second.</summary>
+    [Header("Field")]
+    [Range(0f, 3600f)] public float SparklesPerSecond;
 
     /// <summary>Scale applied to the darkest conditioned palette entry for the field floor.</summary>
     [Range(0f, 1f)] public float FloorLevel;
-
-    /// <summary>Uniform sparkle birth rate per second.</summary>
-    [Range(0f, 3600f)] public float SparklesPerSecond;
 
     /// <summary>
     /// Fraction of each Tile's distance from the floor retained per Buffer frame. The upper Rail
@@ -1289,11 +1291,12 @@ public sealed class ColorSparkleStandaloneSettings
     /// </summary>
     [Range(0.9f, 0.98f)] public float FadePerFrame;
 
-    /// <summary>
-    /// Live Effect-local palette conditioning for Standalone Mode, independently saved so tuning it
-    /// cannot drift the Synced look.
-    /// </summary>
-    public PaletteConditioning PaletteConditioning;
+    /// <summary>Chance that a spawned sparkle is lifted to glint luminance on its Palette hue.</summary>
+    [Header("Glints")]
+    [Range(0f, 0.05f)] public float GlintChance;
+
+    /// <summary>Relative luminance every glint flashes at.</summary>
+    [Range(0f, 1f)] public float GlintLuminance;
 
     /// <summary>
     /// Copies every ColorSparkle Standalone Setting, including range endpoints, Rails, and palette
@@ -1308,19 +1311,19 @@ public sealed class ColorSparkleStandaloneSettings
         }
 
         ConfettiChance = source.ConfettiChance;
-        SingleCoordinateChance = source.SingleCoordinateChance;
         ConfettiPaletteSize = source.ConfettiPaletteSize;
+        SingleCoordinateChance = source.SingleCoordinateChance;
         CoordinateRange = new FloatRange(
             source.CoordinateRange.Min,
             source.CoordinateRange.Max,
             source.CoordinateRange.LowRail,
             source.CoordinateRange.HighRail);
+        PaletteConditioning = source.PaletteConditioning;
+        SparklesPerSecond = source.SparklesPerSecond;
+        FloorLevel = source.FloorLevel;
+        FadePerFrame = source.FadePerFrame;
         GlintChance = source.GlintChance;
         GlintLuminance = source.GlintLuminance;
-        FloorLevel = source.FloorLevel;
-        SparklesPerSecond = source.SparklesPerSecond;
-        FadePerFrame = source.FadePerFrame;
-        PaletteConditioning = source.PaletteConditioning;
     }
 }
 
@@ -1332,13 +1335,14 @@ public sealed class ColorSparkleStandaloneSettings
 public sealed class ColorSparkleSyncSettings
 {
     /// <summary>Chance that the activation Roll selects a randomized confetti Palette.</summary>
+    [Header("Palette")]
     [Range(0f, 1f)] public float ConfettiChance;
-
-    /// <summary>Chance that the activation Roll holds one Palette coordinate for every sparkle instead of scattering across the window.</summary>
-    [Range(0f, 1f)] public float SingleCoordinateChance;
 
     /// <summary>Number of sorted random full-saturation, full-value HSV hues in a confetti Palette.</summary>
     public int ConfettiPaletteSize;
+
+    /// <summary>Chance that the activation Roll holds one Palette coordinate for every sparkle instead of scattering across the window.</summary>
+    [Range(0f, 1f)] public float SingleCoordinateChance;
 
     /// <summary>Cyclic Palette coordinate range every coordinate roll draws from: the activation's held single coordinate, or each scatter sparkle's own.</summary>
     public FloatRange CoordinateRange;
@@ -1349,6 +1353,22 @@ public sealed class ColorSparkleSyncSettings
     /// the new colours.
     /// </summary>
     [Range(0f, 1f)] public float GridPaletteChangeChance;
+
+    /// <summary>
+    /// Live Effect-local palette conditioning for Synced Mode, independently saved so tuning it
+    /// cannot drift the Standalone look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
+
+    /// <summary>Scale applied to the darkest conditioned palette entry for the field floor.</summary>
+    [Header("Field")]
+    [Range(0f, 1f)] public float FloorLevel;
+
+    /// <summary>
+    /// Fraction of each Tile's distance from the floor retained per Buffer frame. The upper Rail
+    /// bounds the slowest fade, so live tuning can only shorten the sparkle lifetime.
+    /// </summary>
+    [Range(0.9f, 0.98f)] public float FadePerFrame;
 
     /// <summary>Sparkle birth-rate range while Energy is Low.</summary>
     [Header("Sparkles per second by Energy")]
@@ -1381,7 +1401,7 @@ public sealed class ColorSparkleSyncSettings
     public LevelsForm LevelsDriveForm;
 
     /// <summary>Levels band that gates glints on each On Beat window.</summary>
-    [Header("Glint gate and fade")]
+    [Header("Glints")]
     public Band GlintGateBand;
 
     /// <summary>Levels form that gates glints on each On Beat window.</summary>
@@ -1396,20 +1416,20 @@ public sealed class ColorSparkleSyncSettings
     /// <summary>Fade-duration range rolled independently by each glint, in beat fractions.</summary>
     public FloatRange GlintFadeBeats;
 
-    /// <summary>Scale applied to the darkest conditioned palette entry for the field floor.</summary>
-    [Range(0f, 1f)] public float FloorLevel;
-
     /// <summary>
-    /// Fraction of each Tile's distance from the floor retained per Buffer frame. The upper Rail
-    /// bounds the slowest fade, so live tuning can only shorten the sparkle lifetime.
+    /// Live Pool entry name held for the 2-and-4 Palette turn. A missing name is a visible configuration
+    /// failure rather than a substituted Waveform.
     /// </summary>
-    [Range(0.9f, 0.98f)] public float FadePerFrame;
+    [Header("Hue turn")]
+    [WaveformName]
+    public string WaveformName;
 
-    /// <summary>
-    /// Live Effect-local palette conditioning for Synced Mode, independently saved so tuning it
-    /// cannot drift the Standalone look.
-    /// </summary>
-    public PaletteConditioning PaletteConditioning;
+    /// <summary>Chance that a newly generated Fill sparkle is born <see cref="FillSparkleColor"/> instead of its Palette colour.</summary>
+    [Header("Fill")]
+    [Range(0f, 1f)] public float FillWhiteChance;
+
+    /// <summary>Colour a Fill sparkle is born with; it holds that colour through the turn and fades with the field.</summary>
+    public Color FillSparkleColor;
 
     /// <summary>Whole-beat Drop approach window over which palette births and beat glints starve.</summary>
     [Header("Drop")]
@@ -1430,21 +1450,6 @@ public sealed class ColorSparkleSyncSettings
     /// <summary>Fraction of each Tile's distance from the floor retained at the Drop landing.</summary>
     [Range(0.9f, 0.999f)] public float DropFadePerFrame;
 
-    /// <summary>Chance that a newly generated Fill sparkle is born <see cref="FillSparkleColor"/> instead of its Palette colour.</summary>
-    [Header("Fill")]
-    [Range(0f, 1f)] public float FillWhiteChance;
-
-    /// <summary>Colour a Fill sparkle is born with; it holds that colour through the turn and fades with the field.</summary>
-    public Color FillSparkleColor;
-
-    /// <summary>
-    /// Live Pool entry name held for the 2-and-4 Palette turn. A missing name is a visible configuration
-    /// failure rather than a substituted Waveform.
-    /// </summary>
-    [Header("Hue turn")]
-    [WaveformName]
-    public string WaveformName;
-
     /// <summary>
     /// Copies every ColorSparkle Sync Setting, including range endpoints, Rails, palette
     /// conditioning, and the complete Drop and Fill controls.
@@ -1458,14 +1463,17 @@ public sealed class ColorSparkleSyncSettings
         }
 
         ConfettiChance = source.ConfettiChance;
-        SingleCoordinateChance = source.SingleCoordinateChance;
         ConfettiPaletteSize = source.ConfettiPaletteSize;
+        SingleCoordinateChance = source.SingleCoordinateChance;
         CoordinateRange = new FloatRange(
             source.CoordinateRange.Min,
             source.CoordinateRange.Max,
             source.CoordinateRange.LowRail,
             source.CoordinateRange.HighRail);
         GridPaletteChangeChance = source.GridPaletteChangeChance;
+        PaletteConditioning = source.PaletteConditioning;
+        FloorLevel = source.FloorLevel;
+        FadePerFrame = source.FadePerFrame;
         LowSparklesPerSecond = Copy(source.LowSparklesPerSecond);
         MidSparklesPerSecond = Copy(source.MidSparklesPerSecond);
         HighSparklesPerSecond = Copy(source.HighSparklesPerSecond);
@@ -1480,18 +1488,15 @@ public sealed class ColorSparkleSyncSettings
         GlintGateThreshold = source.GlintGateThreshold;
         GlintLuminance = Copy(source.GlintLuminance);
         GlintFadeBeats = Copy(source.GlintFadeBeats);
-        FloorLevel = source.FloorLevel;
-        FadePerFrame = source.FadePerFrame;
-        PaletteConditioning = source.PaletteConditioning;
+        WaveformName = source.WaveformName;
+        FillWhiteChance = source.FillWhiteChance;
+        FillSparkleColor = source.FillSparkleColor;
         DropStarveBeats = source.DropStarveBeats;
         DropStarveFloor = source.DropStarveFloor;
         DropLandingGlints = Copy(source.DropLandingGlints);
         DropFloodMultiplier = source.DropFloodMultiplier;
         DropRecoverBeats = source.DropRecoverBeats;
         DropFadePerFrame = source.DropFadePerFrame;
-        FillWhiteChance = source.FillWhiteChance;
-        FillSparkleColor = source.FillSparkleColor;
-        WaveformName = source.WaveformName;
     }
 
     /// <summary>Copies one Float Range with its endpoints and live-tuned Rails.</summary>

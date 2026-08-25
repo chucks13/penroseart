@@ -15,14 +15,25 @@ MonoBehaviour:
   effectTypeName: ColorSparkle
   settings:
     ConfettiChance: 0.125
-    SingleCoordinateChance: 0.5
     ConfettiPaletteSize: 16
+    SingleCoordinateChance: 0.5
     CoordinateRange:
       Min: 0
       Max: 0.15
       LowRail: 0
       HighRail: 0.5
     GridPaletteChangeChance: 0.75
+    PaletteConditioning:
+      TargetLuminance: 0.5
+      MinimumLuminance: 0.12
+      LuminanceEqualization: 0.85
+      HueSpreadReference: 0.5
+      MaximumLuminanceScale: 4
+      DarkLuminanceThreshold: 0.03
+      DuplicateThreshold: 0.08
+      HueRedistribution: 1
+    FloorLevel: 0
+    FadePerFrame: 0.975
     LowSparklesPerSecond:
       Min: 400
       Max: 600
@@ -69,17 +80,9 @@ MonoBehaviour:
       Max: 0.75
       LowRail: 0.5
       HighRail: 1
-    FloorLevel: 0
-    FadePerFrame: 0.975
-    PaletteConditioning:
-      TargetLuminance: 0.5
-      MinimumLuminance: 0.12
-      LuminanceEqualization: 0.85
-      HueSpreadReference: 0.5
-      MaximumLuminanceScale: 4
-      DarkLuminanceThreshold: 0.03
-      DuplicateThreshold: 0.08
-      HueRedistribution: 1
+    WaveformName: beats 2 and 4
+    FillWhiteChance: 0.75
+    FillSparkleColor: {r: 1, g: 1, b: 1, a: 1}
     DropStarveBeats: 8
     DropStarveFloor: 0
     DropLandingGlints:
@@ -90,6 +93,3 @@ MonoBehaviour:
     DropFloodMultiplier: 4
     DropRecoverBeats: 16
     DropFadePerFrame: 0.999
-    FillWhiteChance: 0.75
-    FillSparkleColor: {r: 1, g: 1, b: 1, a: 1}
-    WaveformName: beats 2 and 4

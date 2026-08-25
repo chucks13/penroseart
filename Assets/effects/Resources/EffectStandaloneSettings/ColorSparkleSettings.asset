@@ -9,24 +9,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4db319fa8849d44cd9b274b09a122731, type: 3}
+  m_Script: {fileID: 11500000, guid: 7d6d49d589fcc4088ab63019e83aae44, type: 3}
   m_Name: ColorSparkleSettings
   m_EditorClassIdentifier: Assembly-CSharp::ColorSparkleStandaloneSettingsAsset
   effectTypeName: ColorSparkle
   settings:
     ConfettiChance: 0.125
-    SingleCoordinateChance: 0.5
     ConfettiPaletteSize: 16
+    SingleCoordinateChance: 0.5
     CoordinateRange:
       Min: 0
       Max: 1
       LowRail: 0
       HighRail: 1
-    GlintChance: 0.003
-    GlintLuminance: 0.8
-    FloorLevel: 0
-    SparklesPerSecond: 900
-    FadePerFrame: 0.975
     PaletteConditioning:
       TargetLuminance: 0.4
       MinimumLuminance: 0.12
@@ -36,3 +31,8 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
+    SparklesPerSecond: 900
+    FloorLevel: 0
+    FadePerFrame: 0.975
+    GlintChance: 0.003
+    GlintLuminance: 0.8
