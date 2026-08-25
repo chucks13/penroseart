@@ -121,7 +121,7 @@ public class ColorSparkle : EffectBase
     private const bool SyncLevelsDrive = true;
 
     /// <summary>Authored Levels band that places Synced sparkle rates and glint counts.</summary>
-    private const Band SyncLevelsDriveBand = Band.Low;
+    private const Band SyncLevelsDriveBand = Band.Mid;
 
     /// <summary>Authored Levels form that places Synced sparkle rates and glint counts, tuned at the wall.</summary>
     private const LevelsForm SyncLevelsDriveForm = LevelsForm.Smoothed;
@@ -155,7 +155,7 @@ public class ColorSparkle : EffectBase
     /// tuned at the wall. The 0.98 Rail ceiling preserves the original lifetime; tuning can only
     /// shorten it.
     /// </summary>
-    private const float SyncFadePerFrame = 0.975f;
+    private const float SyncFadePerFrame = 0.98f;
 
     /// <summary>
     /// Sync palette conditioning is independently live so tuning cannot drift the Standalone look.
