@@ -56,8 +56,8 @@ MonoBehaviour:
     LevelsDriveBand: 0
     LevelsDriveForm: 1
     GlintGateBand: 0
-    GlintGateForm: 1
-    GlintGateThreshold: 0.375
+    GlintGateForm: 0
+    GlintGateThreshold: 0.5
     GlintLuminance:
       Min: 0.6
       Max: 0.9
@@ -65,7 +65,7 @@ MonoBehaviour:
       HighRail: 0.9
     GlintFadeBeats:
       Min: 0.5
-      Max: 1
+      Max: 0.75
       LowRail: 0.5
       HighRail: 1
     FloorLevel: 0
@@ -79,7 +79,7 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
-    DropStarveBeats: 4
+    DropStarveBeats: 8
     DropStarveFloor: 0
     DropImpactGlints:
       MinInclusive: 200

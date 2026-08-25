@@ -135,10 +135,10 @@ public class ColorSparkle : EffectBase
     private const Band SyncGlintGateBand = Band.Low;
 
     /// <summary>Authored Levels form that gates beat-fired glints, tuned at the wall.</summary>
-    private const LevelsForm SyncGlintGateForm = LevelsForm.Smoothed;
+    private const LevelsForm SyncGlintGateForm = LevelsForm.Normalized;
 
     /// <summary>Authored Levels threshold that a beat must exceed before glints fire.</summary>
-    private const float SyncGlintGateThreshold = 0.375f;
+    private const float SyncGlintGateThreshold = 0.5f;
 
     /// <summary>Authored minimum relative luminance rolled independently by each Synced glint.</summary>
     private const float SyncGlintLuminanceMin = 0.6f;
@@ -150,7 +150,10 @@ public class ColorSparkle : EffectBase
     private const float SyncGlintFadeBeatsMin = 0.5f;
 
     /// <summary>Authored maximum fade duration for each Synced glint, in beat fractions.</summary>
-    private const float SyncGlintFadeBeatsMax = 1f;
+    private const float SyncGlintFadeBeatsMax = 0.75f;
+
+    /// <summary>Authored upper Rail for the glint fade range, kept at the original one-beat ceiling the asset carries.</summary>
+    private const float SyncGlintFadeBeatsHighRail = 1f;
 
     /// <summary>Authored scale applied to the darkest conditioned palette entry for the Synced field floor.</summary>
     private const float SyncFloorLevel = 0f;
@@ -180,7 +183,7 @@ public class ColorSparkle : EffectBase
     };
 
     /// <summary>Authored Drop approach window over which palette births and beat glints starve.</summary>
-    private const int SyncDropStarveBeats = 4;
+    private const int SyncDropStarveBeats = 8;
 
     /// <summary>Authored fraction of the Energy-tier rate retained at the end of the Drop approach.</summary>
     private const float SyncDropStarveFloor = 0f;
@@ -395,7 +398,9 @@ public class ColorSparkle : EffectBase
             SyncGlintLuminanceMax),
         GlintFadeBeats = new FloatRange(
             SyncGlintFadeBeatsMin,
-            SyncGlintFadeBeatsMax),
+            SyncGlintFadeBeatsMax,
+            SyncGlintFadeBeatsMin,
+            SyncGlintFadeBeatsHighRail),
         FloorLevel = SyncFloorLevel,
         FadePerFrame = SyncFadePerFrame,
         PaletteConditioning = SyncPaletteConditioning,
