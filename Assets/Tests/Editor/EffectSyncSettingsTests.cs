@@ -1305,6 +1305,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ConfettiChance = 0.41f;
         asset.Settings.ConfettiPaletteSize = 42;
         asset.Settings.CoordinateRange = new FloatRange(0.45f, 0.46f, 0.44f, 0.47f);
+        asset.Settings.GridPaletteChangeChance = 0.66f;
         asset.Settings.LowSparklesPerSecond = new FloatRange(48f, 49f, 47f, 50f);
         asset.Settings.MidSparklesPerSecond = new FloatRange(51f, 52f, 50f, 53f);
         asset.Settings.HighSparklesPerSecond = new FloatRange(54f, 55f, 53f, 56f);
@@ -1343,6 +1344,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ConfettiChance, Is.EqualTo(defaults.ConfettiChance));
         Assert.That(asset.Settings.ConfettiPaletteSize, Is.EqualTo(defaults.ConfettiPaletteSize));
         AssertFloatRangeEqual(asset.Settings.CoordinateRange, defaults.CoordinateRange);
+        Assert.That(
+            asset.Settings.GridPaletteChangeChance,
+            Is.EqualTo(defaults.GridPaletteChangeChance));
         AssertFloatRangeEqual(
             asset.Settings.LowSparklesPerSecond,
             defaults.LowSparklesPerSecond);

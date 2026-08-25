@@ -77,6 +77,9 @@ public class ColorSparkle : EffectBase
     /// </summary>
     private const float SyncCoordinateMax = 1f;
 
+    /// <summary>Authored chance that each Grid Boundary changes the shared palette, tuned at the wall.</summary>
+    private const float SyncGridPaletteChangeChance = 0.5f;
+
     /// <summary>Authored minimum Synced sparkle rate while Energy is Low, tuned at the wall.</summary>
     private const float SyncLowSparklesPerSecondMin = 400f;
 
@@ -338,6 +341,7 @@ public class ColorSparkle : EffectBase
         CoordinateRange = new FloatRange(
             SyncCoordinateMin,
             SyncCoordinateMax),
+        GridPaletteChangeChance = SyncGridPaletteChangeChance,
         LowSparklesPerSecond = new FloatRange(
             SyncLowSparklesPerSecondMin,
             SyncLowSparklesPerSecondMax),
@@ -530,6 +534,19 @@ public class ColorSparkle : EffectBase
             ? CreateConfettiPalette(confettiPaletteSize)
             : null;
         confettiPalette = null;
+    }
+
+    /// <summary>
+    /// On each Grid Boundary, rolls whether the shared palette changes, so a long activation keeps
+    /// turning its colours over as Tunnel and Julia do. The Grid exists only in Synced Mode, so
+    /// Standalone never reaches this hook.
+    /// </summary>
+    protected override void OnNewGrid()
+    {
+        if (Random.value < SyncSettings.GridPaletteChangeChance)
+        {
+            APalette.Change();
+        }
     }
 
     /// <summary>
@@ -1168,6 +1185,12 @@ public sealed class ColorSparkleSyncSettings
     /// <summary>Cyclic Palette coordinate range every coordinate roll draws from: the activation's held single coordinate, or each scatter sparkle's own.</summary>
     public FloatRange CoordinateRange;
 
+    /// <summary>
+    /// Chance that each Grid Boundary changes the shared palette, cross-fading every living sparkle
+    /// to the new colours. A confetti activation keeps its own Palette and shows only the floor move.
+    /// </summary>
+    [Range(0f, 1f)] public float GridPaletteChangeChance;
+
     /// <summary>Sparkle birth-rate range while Energy is Low.</summary>
     [Header("Sparkles per second by Energy")]
     public FloatRange LowSparklesPerSecond;
@@ -1265,6 +1288,7 @@ public sealed class ColorSparkleSyncSettings
             source.CoordinateRange.Max,
             source.CoordinateRange.LowRail,
             source.CoordinateRange.HighRail);
+        GridPaletteChangeChance = source.GridPaletteChangeChance;
         LowSparklesPerSecond = Copy(source.LowSparklesPerSecond);
         MidSparklesPerSecond = Copy(source.MidSparklesPerSecond);
         HighSparklesPerSecond = Copy(source.HighSparklesPerSecond);
