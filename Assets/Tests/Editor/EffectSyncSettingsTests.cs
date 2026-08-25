@@ -1336,6 +1336,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DropHue = new FloatRange(0.62f, 0.63f, 0.61f, 0.64f);
         asset.Settings.DropSparkleDivisor = 7;
         asset.Settings.FillWhiteChance = 0.65f;
+        asset.Settings.FillSparkleColor = new Color(0.66f, 0.67f, 0.68f, 1f);
         asset.Settings.WaveformName = "test waveform";
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(ColorSparkle), TempAssetFolder);
@@ -1375,6 +1376,7 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(asset.Settings.DropHue, defaults.DropHue);
         Assert.That(asset.Settings.DropSparkleDivisor, Is.EqualTo(defaults.DropSparkleDivisor));
         Assert.That(asset.Settings.FillWhiteChance, Is.EqualTo(defaults.FillWhiteChance));
+        Assert.That(asset.Settings.FillSparkleColor, Is.EqualTo(defaults.FillSparkleColor));
         Assert.That(asset.Settings.WaveformName, Is.EqualTo(defaults.WaveformName));
     }
 

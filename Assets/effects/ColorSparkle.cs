@@ -182,8 +182,11 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored divisor that halves the number of generated sparkles during a Drop.</summary>
     private const int SyncDropSparkleDivisor = 2;
 
-    /// <summary>Authored chance that a newly generated Fill sparkle is white.</summary>
+    /// <summary>Authored chance that a newly generated Fill sparkle is born the Fill colour.</summary>
     private const float SyncFillWhiteChance = 0.5f;
+
+    /// <summary>Authored colour a Fill sparkle is born with: white, so the Fill reads as a whitening of the field.</summary>
+    private static Color SyncFillSparkleColor => Color.white;
 
     /// <summary>Authored Pool Waveform held for the Synced 2-and-4 Palette turn.</summary>
     private const string SyncWaveformName = "beats 2 and 4";
@@ -379,6 +382,7 @@ public class ColorSparkle : EffectBase
         DropHue = new FloatRange(SyncDropHueMin, SyncDropHueMax),
         DropSparkleDivisor = SyncDropSparkleDivisor,
         FillWhiteChance = SyncFillWhiteChance,
+        FillSparkleColor = SyncFillSparkleColor,
         WaveformName = SyncWaveformName,
     };
 
@@ -440,14 +444,15 @@ public class ColorSparkle : EffectBase
     private float dropHue;
 
     /// <summary>
-    /// ColorSparkle's fading sparkle field can accent Fill and Drop moments while its gentle shimmer
-    /// suits Low/Mid-energy sections.
+    /// ColorSparkle's fading sparkle field accents Fill and Drop moments, and its sparkle rate and
+    /// glint count are placed per Energy tier, so it serves Low, Mid, and High sections.
     /// </summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill |
         Repertoire.HandlesDrop |
         Repertoire.EnergyLow |
-        Repertoire.EnergyMid;
+        Repertoire.EnergyMid |
+        Repertoire.EnergyHigh;
 
     /// <summary>
     /// Returns the activation Palette and coordinate policy, live Energy, Levels drive, and most
@@ -689,7 +694,9 @@ public class ColorSparkle : EffectBase
             bool fillWhite = fillActive && Random.value < SyncSettings.FillWhiteChance;
             if (dropActive || fillWhite)
             {
-                SpawnFixedSparkle(fillWhite ? Color.white : dropColor, turnProgress);
+                SpawnFixedSparkle(
+                    fillWhite ? SyncSettings.FillSparkleColor : dropColor,
+                    turnProgress);
                 continue;
             }
 
@@ -1253,8 +1260,12 @@ public sealed class ColorSparkleSyncSettings
     /// <summary>Divisor applied to the generated sparkle count during a Drop.</summary>
     [Min(1)] public int DropSparkleDivisor;
 
-    /// <summary>Chance that a newly generated Fill sparkle is white.</summary>
+    /// <summary>Chance that a newly generated Fill sparkle is born <see cref="FillSparkleColor"/> instead of its Palette colour.</summary>
+    [Header("Fill")]
     [Range(0f, 1f)] public float FillWhiteChance;
+
+    /// <summary>Colour a Fill sparkle is born with; it holds that colour through the turn and fades with the field.</summary>
+    public Color FillSparkleColor;
 
     /// <summary>
     /// Live Pool entry name held for the 2-and-4 Palette turn. A missing name is a visible configuration
@@ -1308,6 +1319,7 @@ public sealed class ColorSparkleSyncSettings
             source.DropHue.HighRail);
         DropSparkleDivisor = source.DropSparkleDivisor;
         FillWhiteChance = source.FillWhiteChance;
+        FillSparkleColor = source.FillSparkleColor;
         WaveformName = source.WaveformName;
     }
 
