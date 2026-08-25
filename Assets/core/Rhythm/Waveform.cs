@@ -32,9 +32,11 @@ using UnityEngine;
 /// </para>
 /// <para>
 /// A runtime Waveform acquired from <see cref="Waveforms"/> is bound to the shared musical clock and
-/// exposes its current <see cref="Envelope"/> plus direct response helpers such as <see cref="Lerp"/>.
-/// <see cref="Sample"/> remains the clock-agnostic shape kernel used by runtime playback and Editor
-/// plots, so visualization and playback cannot drift.
+/// exposes its current <see cref="Envelope"/>, the two phase reads <see cref="TroughToTroughProgress"/>
+/// and <see cref="PeakToPeakProgress"/>, plus direct response helpers such as <see cref="Lerp"/>.
+/// <see cref="Sample"/>, <see cref="SampleTroughToTrough"/>, and <see cref="SamplePeakToPeak"/> remain
+/// the clock-agnostic kernels used by runtime playback and Editor plots, so visualization and playback
+/// cannot drift.
 /// </para>
 /// <para>
 /// <b>Malformation is reported and bounded, not hidden.</b> The runtime-facing parser logs diagnostics;
@@ -129,7 +131,38 @@ public readonly struct Waveform
         get
         {
             EnsureInitialized();
-            return TrySampleCurrent(out var envelope) ? envelope : 0f;
+            return TryCurrentBarPhase(out var barPhase) ? Sample(barPhase) : 0f;
+        }
+    }
+
+    /// <summary>
+    /// Progress through the current audible Hump in <c>[0..1)</c>: 0 at the trough before its peak,
+    /// 0.5 on the peak, rising toward 1 at the trough after it. One sweep covers exactly the span where
+    /// <see cref="Envelope"/> rises from 0 and falls back to 0, so a consumer that wants one motion per
+    /// Hump reads this instead of the symmetric envelope. Rests at 0 through silent stretches and
+    /// whenever <see cref="Envelope"/> rests.
+    /// </summary>
+    public float TroughToTroughProgress
+    {
+        get
+        {
+            EnsureInitialized();
+            return TryCurrentBarPhase(out var barPhase) ? SampleTroughToTrough(barPhase) : 0f;
+        }
+    }
+
+    /// <summary>
+    /// Progress from the latest audible peak to the next one in <c>[0..1)</c>: 0 on a peak, rising
+    /// toward 1 as the next audible peak arrives. Silent Humps are skipped beats, not peaks, so the
+    /// sweep runs across them; a lone peak sweeps the whole bar. Rests at 0 when no Hump is audible and
+    /// whenever <see cref="Envelope"/> rests.
+    /// </summary>
+    public float PeakToPeakProgress
+    {
+        get
+        {
+            EnsureInitialized();
+            return TryCurrentBarPhase(out var barPhase) ? SamplePeakToPeak(barPhase) : 0f;
         }
     }
 
@@ -142,7 +175,7 @@ public readonly struct Waveform
     public float Lerp(float from, float to)
     {
         EnsureInitialized();
-        return TrySampleCurrent(out var envelope) ? envelope.Lerp(from, to) : to;
+        return TryCurrentBarPhase(out var barPhase) ? Sample(barPhase).Lerp(from, to) : to;
     }
 
     /// <summary>
@@ -361,59 +394,141 @@ public readonly struct Waveform
     public float Sample(float barPhase)
     {
         EnsureInitialized();
-        if (humps == null || humps.Length == 0)
+        if (!TryLocateSlot(barPhase, out var index, out var slotProgress))
         {
             return 0f;
         }
 
-        // Looking up an earlier phase moves the authored peaks later by the requested offset.
-        var lookup = Mathf.Repeat(barPhase - (offset / BeatsPerBar), 1f);
+        var distanceFromPeak = slotProgress < 0.5f ? slotProgress * 2f : (1f - slotProgress) * 2f;
+        return GoverningAmplitude(index, slotProgress) * ShapeHump(distanceFromPeak, rounding);
+    }
 
+    /// <summary>
+    /// Samples trough-to-trough progress at a normalized Bar Phase: 0 at the trough before an audible
+    /// peak, 0.5 on the peak, rising toward 1 at the trough after it, and 0 wherever the envelope is
+    /// silent. The clock-agnostic kernel behind <see cref="TroughToTroughProgress"/>.
+    /// </summary>
+    /// <param name="barPhase">Position within the bar; values outside [0..1) are wrapped.</param>
+    /// <returns>Progress in <c>[0..1)</c>.</returns>
+    public float SampleTroughToTrough(float barPhase)
+    {
+        EnsureInitialized();
+        if (!TryLocateSlot(barPhase, out var index, out var slotProgress)
+            || GoverningAmplitude(index, slotProgress) <= 0f)
+        {
+            return 0f;
+        }
+
+        // The falling half runs 0.5 → 1 away from this slot's peak; the rising half runs 0 → 0.5 into
+        // the next peak. They meet at the trough, where 1 wraps to 0.
+        return slotProgress < 0.5f ? slotProgress + 0.5f : slotProgress - 0.5f;
+    }
+
+    /// <summary>
+    /// Samples peak-to-peak progress at a normalized Bar Phase: 0 on the latest audible peak, rising
+    /// toward 1 as the next audible peak arrives, with silent Humps inside the span rather than
+    /// breaking it. The clock-agnostic kernel behind <see cref="PeakToPeakProgress"/>.
+    /// </summary>
+    /// <param name="barPhase">Position within the bar; values outside [0..1) are wrapped.</param>
+    /// <returns>Progress in <c>[0..1)</c>; 0 when no Hump is audible.</returns>
+    public float SamplePeakToPeak(float barPhase)
+    {
+        EnsureInitialized();
+        if (!TryLocateSlot(barPhase, out var index, out _))
+        {
+            return 0f;
+        }
+
+        // Walk back to the audible Hump whose peak opened this stretch.
+        var count = humps.Length;
+        var owner = index;
+        for (var steps = 0; steps < count && !humps[owner].IsAudible; steps++)
+        {
+            owner = (owner + count - 1) % count;
+        }
+
+        if (!humps[owner].IsAudible)
+        {
+            return 0f;
+        }
+
+        // The span ends at the next audible peak; a lone peak laps the whole bar back to itself.
+        var span = 0f;
+        var next = owner;
+        do
+        {
+            span += humps[next].width;
+            next = (next + 1) % count;
+        }
+        while (!humps[next].IsAudible);
+
+        var elapsed = Mathf.Repeat(ShiftedPhase(barPhase) - humps[owner].start, 1f);
+        return Mathf.Clamp01(elapsed / span);
+    }
+
+    /// <summary>Shifts a Bar Phase by <see cref="offset"/> into the Waveform's own frame, wrapped into [0..1).</summary>
+    /// <remarks>Looking up an earlier phase moves the authored peaks later by the requested offset.</remarks>
+    private float ShiftedPhase(float barPhase) =>
+        Mathf.Repeat(barPhase - (offset / BeatsPerBar), 1f);
+
+    /// <summary>
+    /// Finds the Hump slot holding a Bar Phase and how far through that slot it sits. Every sampling
+    /// kernel starts here so the three reads agree about which peak governs a phase.
+    /// </summary>
+    /// <param name="barPhase">Position within the bar; wrapped and shifted by <see cref="offset"/>.</param>
+    /// <param name="index">The slot whose span contains the shifted phase.</param>
+    /// <param name="slotProgress">Position through the slot in <c>[0..1)</c>: 0 on its peak, 0.5 at the trough.</param>
+    /// <returns>False when no slot covers the phase, which only a malformed under-filled bar produces.</returns>
+    private bool TryLocateSlot(float barPhase, out int index, out float slotProgress)
+    {
+        index = -1;
+        slotProgress = 0f;
+        if (humps == null || humps.Length == 0)
+        {
+            return false;
+        }
+
+        var lookup = ShiftedPhase(barPhase);
         for (var i = 0; i < humps.Length; i++)
         {
             var hump = humps[i];
-            if (hump.width <= 0f)
+            if (hump.width <= 0f || lookup < hump.start || lookup >= hump.start + hump.width)
             {
                 continue;
             }
 
-            var segmentStart = hump.start;
-            var segmentEnd = hump.start + hump.width;
-            if (lookup < segmentStart || lookup >= segmentEnd)
-            {
-                continue;
-            }
-
-            var midpoint = (segmentStart + segmentEnd) * 0.5f;
-            if (lookup < midpoint)
-            {
-                var distanceFromPeak = (lookup - segmentStart) / (midpoint - segmentStart);
-                return hump.amplitude * ShapeHump(distanceFromPeak, rounding);
-            }
-
-            // The next Hump owns the rising half; the final segment wraps to the next bar's downbeat.
-            var nextAmplitude = humps[(i + 1) % humps.Length].amplitude;
-            var distanceFromNextPeak = (segmentEnd - lookup) / (segmentEnd - midpoint);
-            return nextAmplitude * ShapeHump(distanceFromNextPeak, rounding);
-        }
-
-        // A malformed under-filled bar reads its uncovered interval as trough.
-        return 0f;
-    }
-
-    /// <summary>Samples this bound value at the current Bar Phase when one exists.</summary>
-    /// <param name="envelope">The sampled envelope, or 0 when live placement is unavailable.</param>
-    /// <returns>True when a live Bar Phase was available and sampled.</returns>
-    private bool TrySampleCurrent(out float envelope)
-    {
-        EnsureRuntimeBound();
-        if (!disabled && clockSource.Timing.BarProgress is { } barPhase)
-        {
-            envelope = Sample(barPhase);
+            index = i;
+            slotProgress = (lookup - hump.start) / hump.width;
             return true;
         }
 
-        envelope = 0f;
+        return false;
+    }
+
+    /// <summary>
+    /// The height of the peak shaping one half of a slot: the slot's own peak while falling, the next
+    /// Hump's peak while rising. The final slot wraps to the next bar's downbeat.
+    /// </summary>
+    /// <param name="index">The slot located by <see cref="TryLocateSlot"/>.</param>
+    /// <param name="slotProgress">Position through that slot.</param>
+    private float GoverningAmplitude(int index, float slotProgress) =>
+        slotProgress < 0.5f
+            ? humps[index].amplitude
+            : humps[(index + 1) % humps.Length].amplitude;
+
+    /// <summary>Reads the live Bar Phase this bound value samples against, when one exists.</summary>
+    /// <param name="barPhase">The current Bar Phase, or 0 when live placement is unavailable.</param>
+    /// <returns>True when a live Bar Phase was available and this value is not disabled.</returns>
+    private bool TryCurrentBarPhase(out float barPhase)
+    {
+        EnsureRuntimeBound();
+        if (!disabled && clockSource.Timing.BarProgress is { } liveBarPhase)
+        {
+            barPhase = liveBarPhase;
+            return true;
+        }
+
+        barPhase = 0f;
         return false;
     }
 

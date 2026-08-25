@@ -141,6 +141,57 @@ public sealed class WaveformTests
         Assert.That(wf.ShortestNonZeroPeakSpacing(), Is.EqualTo(0f).Within(Tol));
     }
 
+    /// <summary>
+    /// Scenario: "beats 2 and 4" (QQQQ / 0808). Asserts trough-to-trough progress runs 0 → 0.5 → 1
+    /// across each audible Hump, from the trough half a beat before its peak to the trough half a beat
+    /// after, and rests at 0 through the silent beats.
+    /// </summary>
+    [Test]
+    public void TroughToTrough_SweepsOnceAcrossEachAudibleHumpAndRestsInSilence()
+    {
+        var wf = Waveform.Parse("QQQQ", "0808");
+        Assert.That(wf.SampleTroughToTrough(0f), Is.EqualTo(0f).Within(Tol));         // beat 1, silent
+        Assert.That(wf.SampleTroughToTrough(0.125f), Is.EqualTo(0f).Within(Tol));     // trough before beat 2
+        Assert.That(wf.SampleTroughToTrough(0.1875f), Is.EqualTo(0.25f).Within(Tol)); // rising into beat 2
+        Assert.That(wf.SampleTroughToTrough(0.25f), Is.EqualTo(0.5f).Within(Tol));    // beat 2 peak
+        Assert.That(wf.SampleTroughToTrough(0.3125f), Is.EqualTo(0.75f).Within(Tol)); // falling after beat 2
+        Assert.That(wf.SampleTroughToTrough(0.375f), Is.EqualTo(0f).Within(Tol));     // trough after beat 2, silence ahead
+        Assert.That(wf.SampleTroughToTrough(0.5f), Is.EqualTo(0f).Within(Tol));       // beat 3, silent
+        Assert.That(wf.SampleTroughToTrough(0.75f), Is.EqualTo(0.5f).Within(Tol));    // beat 4 peak
+    }
+
+    /// <summary>
+    /// Scenario: "beats 2 and 4" (QQQQ / 0808). Asserts peak-to-peak progress runs 0 → 1 from beat 2
+    /// to beat 4 and again from beat 4 around the bar to beat 2, with the silent beats inside each span
+    /// rather than counted as peaks.
+    /// </summary>
+    [Test]
+    public void PeakToPeak_SweepsBetweenAudiblePeaksAcrossSilentHumps()
+    {
+        var wf = Waveform.Parse("QQQQ", "0808");
+        Assert.That(wf.SamplePeakToPeak(0.25f), Is.EqualTo(0f).Within(Tol));     // beat 2 peak
+        Assert.That(wf.SamplePeakToPeak(0.5f), Is.EqualTo(0.5f).Within(Tol));    // beat 3, halfway to beat 4
+        Assert.That(wf.SamplePeakToPeak(0.75f), Is.EqualTo(0f).Within(Tol));     // beat 4 peak
+        Assert.That(wf.SamplePeakToPeak(0f), Is.EqualTo(0.5f).Within(Tol));      // beat 1, halfway around to beat 2
+        Assert.That(wf.SamplePeakToPeak(0.125f), Is.EqualTo(0.75f).Within(Tol)); // beat 1.5
+    }
+
+    /// <summary>
+    /// Scenario: "measure start" (QQQQ / 8000) has one audible peak and QQQQ / 0000 has none. Asserts
+    /// the lone peak's sweep spans the whole bar, and that both sweeps rest at 0 with no audible peak.
+    /// </summary>
+    [Test]
+    public void PeakToPeak_LonePeakSpansTheBarAndNoPeakRestsAtZero()
+    {
+        var lone = Waveform.Parse("QQQQ", "8000");
+        Assert.That(lone.SamplePeakToPeak(0f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(lone.SamplePeakToPeak(0.75f), Is.EqualTo(0.75f).Within(Tol));
+
+        var silent = Waveform.Parse("QQQQ", "0000");
+        Assert.That(silent.SamplePeakToPeak(0.3f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(silent.SampleTroughToTrough(0.3f), Is.EqualTo(0f).Within(Tol));
+    }
+
     // --- Malformation is logged, never silently substituted ---
 
     [Test]

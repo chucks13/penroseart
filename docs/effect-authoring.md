@@ -196,7 +196,7 @@ child.OnStart();
 
 After `OnStart()`, the mixer may directly configure the child. Assign the mixer's `waveform` for unison, assign `waveforms.None` to suppress child Waveform response, or leave it unchanged for independent behavior. These are ordinary object assignments, not runtime modes. If unison or suppression must persist across Grid wraps, reapply the assignment after `child.UpdateTime()` and before `child.Draw()`, because the child's Grid hook may acquire a new Waveform.
 
-Waveform response reads from the value itself. Use `waveform.Envelope` for a raw `[0..1]` lift, or `waveform.Lerp(from, to)` when the rhythm maps between two artistic endpoints. Without live placement, `Envelope` is 0 and `Lerp` returns `to`, preserving the effect's explicit Standalone response without nullable syntax.
+Waveform response reads from the value itself. Use `waveform.Envelope` for a raw `[0..1]` lift, or `waveform.Lerp(from, to)` when the rhythm maps between two artistic endpoints. When the motion should run one way through a hit instead of rising and falling with it, read a phase instead: `waveform.TroughToTroughProgress` runs 0 → 1 across one audible Hump (0.5 on the peak, 0 through silence), and `waveform.PeakToPeakProgress` runs 0 → 1 from one audible peak to the next, spanning skipped beats. Without live placement, `Envelope` and both progress reads are 0 and `Lerp` returns `to`, preserving the effect's explicit Standalone response without nullable syntax.
 
 Then, inside `Draw()`:
 
