@@ -394,8 +394,17 @@ public class ColorSparkle : EffectBase
     /// </summary>
     private readonly ConditionedPaletteCache conditionedPalette = new();
 
-    /// <summary>Randomized Palette held when the activation Roll selects confetti.</summary>
+    /// <summary>Raw random hues rolled when the activation Roll selects confetti.</summary>
+    private GPalette confettiSource;
+
+    /// <summary>
+    /// The confetti Palette every read uses: <see cref="confettiSource"/> conditioned with the same
+    /// live controls as the shared Palette, so confetti and the shared Palette share one look.
+    /// </summary>
     private GPalette confettiPalette;
+
+    /// <summary>The live conditioning controls <see cref="confettiPalette"/> was derived with.</summary>
+    private PaletteConditioning confettiConditioning;
 
     /// <summary>Whether every activation Palette read comes from the held confetti Palette.</summary>
     private bool usesConfettiPalette;
@@ -522,12 +531,30 @@ public class ColorSparkle : EffectBase
     private void RollActivationPalette(float confettiChance, int confettiPaletteSize)
     {
         usesConfettiPalette = Random.value < confettiChance;
-        confettiPalette = usesConfettiPalette
+        confettiSource = usesConfettiPalette
             ? CreateConfettiPalette(confettiPaletteSize)
             : null;
+        confettiPalette = null;
     }
 
-    /// <summary>Builds one confetti Palette from sorted full-saturation, full-value random hues.</summary>
+    /// <summary>
+    /// Conditions the held confetti source with the live controls, redoing the work only when the
+    /// controls change so a Play Mode edit reaches confetti without a new activation.
+    /// </summary>
+    /// <param name="conditioning">The surface's live conditioning controls this frame.</param>
+    private void RefreshConfettiPalette(PaletteConditioning conditioning)
+    {
+        if (!usesConfettiPalette ||
+            (confettiPalette != null && confettiConditioning.Matches(conditioning)))
+        {
+            return;
+        }
+
+        confettiPalette = confettiSource.Conditioned(conditioning);
+        confettiConditioning = conditioning;
+    }
+
+    /// <summary>Builds one raw confetti Palette from sorted full-saturation, full-value random hues.</summary>
     /// <param name="size">Number of random Palette entries.</param>
     /// <returns>The fixed confetti Palette for one activation.</returns>
     internal static GPalette CreateConfettiPalette(int size)
@@ -605,6 +632,7 @@ public class ColorSparkle : EffectBase
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
         conditionedPalette.Refresh(APalette, paletteConditioning);
+        RefreshConfettiPalette(paletteConditioning);
         float turnProgress = waveform.TroughToTroughProgress;
 
         float sparklesPerSecond;
