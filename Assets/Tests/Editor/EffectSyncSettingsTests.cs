@@ -1299,9 +1299,10 @@ public sealed class EffectSyncSettingsTests
     [Test]
     public void RestoreSyncDefaultsCopiesEveryColorSparkleValue()
     {
-        var asset = (ColorSparkleSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
-            typeof(ColorSparkle),
-            TempAssetFolder);
+        var asset = (ColorSparkleSyncSettingsAsset)
+            EffectSyncSettingsAssetUtility.EnsureAsset(
+                typeof(ColorSparkle),
+                TempAssetFolder);
         asset.Settings.ConfettiChance = 0.41f;
         asset.Settings.ConfettiPaletteSize = 42;
         asset.Settings.CoordinateRange = new FloatRange(0.45f, 0.46f, 0.44f, 0.47f);

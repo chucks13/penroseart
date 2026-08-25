@@ -133,7 +133,6 @@ public sealed class WaveformTests
         Assert.That(wf.ShortestNonZeroPeakSpacing(), Is.EqualTo(1f).Within(Tol));
     }
 
-
     [Test]
     public void ShortestNonZeroPeakSpacing_ReturnsZeroWhenNoAudiblePeaksExist()
     {

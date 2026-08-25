@@ -21,7 +21,7 @@ EXPECTED_DEFINITIONS = 17
 EXPECTED_UNIQUE_PALETTES = 16
 ANIM_PALETTE_TRANSITION_TIME = 3.0
 
-# This object contains only values stated in the redesign brief. Keep conditioning
+# This object contains only values stated in the audition brief. Keep conditioning
 # defaults separate because the brief names those controls without assigning values.
 DEFAULTS = {
     "fadePerFrame": 0.98,
@@ -41,7 +41,7 @@ DEFAULTS = {
     "comparisonMode": False,
 }
 
-BRIEF_DEFAULTS = {
+AUDITION_DEFAULTS = {
     "fadePerFrame": 0.98,
     "floorLevel": 0.0,
     "sparklesPerSecond": 900.0,
@@ -552,7 +552,7 @@ HTML = r'''<!doctype html>
         <div class="actions">
           <button class="primary" id="rollButton" type="button">Roll now</button>
           <button id="pauseButton" type="button">Pause</button>
-          <button id="resetButton" type="button">Reset to proposal</button>
+          <button id="resetButton" type="button">Reset audition</button>
         </div>
 
         <section class="control-group" aria-labelledby="colorHeading">
@@ -691,9 +691,9 @@ HTML = r'''<!doctype html>
         </section>
 
         <details class="secondary">
-          <summary>Current shipped algorithm</summary>
+          <summary>Pre-redesign algorithm</summary>
           <label class="switch-row">
-            <span class="switch-copy"><span class="switch-name">Use shipped Standalone look</span><span class="switch-detail">Full-value HSV · 50/50 activation Roll · no palette or glints</span></span>
+            <span class="switch-copy"><span class="switch-name">Use pre-redesign Standalone look</span><span class="switch-detail">Full-value HSV · 50/50 activation Roll · no palette or glints</span></span>
             <input id="comparisonMode" type="checkbox">
           </label>
         </details>
@@ -1047,7 +1047,7 @@ HTML = r'''<!doctype html>
           if (paletteHoldStepsRemaining === 0) advancePalette();
         }
 
-        function proposalRoll() {
+        function auditionRoll() {
           if (settings.variantLock !== "auto") {
             variant = settings.variantLock;
           } else if (Math.random() < settings.confettiChance) {
@@ -1069,7 +1069,7 @@ HTML = r'''<!doctype html>
         }
 
         function roll() {
-          proposalRoll();
+          auditionRoll();
           currentRoll();
           rerollRemaining = settings.autoRerollSeconds;
           clearBuffer();
@@ -1098,7 +1098,7 @@ HTML = r'''<!doctype html>
           return readAnimatedPalette(coordinate);
         }
 
-        function spawnProposalSparkle() {
+        function spawnAuditionSparkle() {
           const tileIndex = Math.floor(Math.random() * TILE_COUNT);
           const color = sparkleColor();
           if (Math.random() >= settings.glintChance) {
@@ -1116,7 +1116,7 @@ HTML = r'''<!doctype html>
           writeTile(tileIndex, color);
         }
 
-        function proposalStep() {
+        function auditionStep() {
           const floor = floorColor();
           for (let tileIndex = 0; tileIndex < TILE_COUNT; tileIndex++) {
             const offset = tileIndex * 3;
@@ -1129,7 +1129,7 @@ HTML = r'''<!doctype html>
           sparkleCarry += settings.sparklesPerSecond * FIXED_STEP;
           const count = Math.floor(sparkleCarry);
           sparkleCarry -= count;
-          for (let index = 0; index < count; index++) spawnProposalSparkle();
+          for (let index = 0; index < count; index++) spawnAuditionSparkle();
         }
 
         function currentStep() {
@@ -1151,7 +1151,7 @@ HTML = r'''<!doctype html>
             if (rerollRemaining <= 0) roll();
           }
           if (settings.comparisonMode) currentStep();
-          else proposalStep();
+          else auditionStep();
         }
 
         function clearBuffer() {
@@ -1496,11 +1496,11 @@ HTML = r'''<!doctype html>
 
 def verify_cold_load(html: str) -> None:
     """Checks the actual baked DEFAULTS object and zero-click boot wiring."""
-    assert DEFAULTS == BRIEF_DEFAULTS, "Python DEFAULTS drifted from the redesign brief"
+    assert DEFAULTS == AUDITION_DEFAULTS, "Python DEFAULTS drifted from the audition brief"
     match = re.search(r"const DEFAULTS = (\{.*?\});", html, flags=re.S)
     assert match is not None, "baked DEFAULTS object was not found"
-    assert json.loads(match.group(1)) == BRIEF_DEFAULTS, (
-        "baked DEFAULTS object drifted from the redesign brief"
+    assert json.loads(match.group(1)) == AUDITION_DEFAULTS, (
+        "baked DEFAULTS object drifted from the audition brief"
     )
     required_boot_wiring = (
         "let running = true;",

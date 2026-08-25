@@ -394,7 +394,8 @@ public readonly struct Waveform
     public float Sample(float barPhase)
     {
         EnsureInitialized();
-        if (!TryLocateSlot(barPhase, out var index, out var slotProgress))
+        var shiftedPhase = ShiftedPhase(barPhase);
+        if (!TryLocateSlot(shiftedPhase, out var index, out var slotProgress))
         {
             return 0f;
         }
@@ -413,7 +414,8 @@ public readonly struct Waveform
     public float SampleTroughToTrough(float barPhase)
     {
         EnsureInitialized();
-        if (!TryLocateSlot(barPhase, out var index, out var slotProgress)
+        var shiftedPhase = ShiftedPhase(barPhase);
+        if (!TryLocateSlot(shiftedPhase, out var index, out var slotProgress)
             || GoverningAmplitude(index, slotProgress) <= 0f)
         {
             return 0f;
@@ -434,7 +436,8 @@ public readonly struct Waveform
     public float SamplePeakToPeak(float barPhase)
     {
         EnsureInitialized();
-        if (!TryLocateSlot(barPhase, out var index, out _))
+        var shiftedPhase = ShiftedPhase(barPhase);
+        if (!TryLocateSlot(shiftedPhase, out var index, out _))
         {
             return 0f;
         }
@@ -462,7 +465,7 @@ public readonly struct Waveform
         }
         while (!humps[next].IsAudible);
 
-        var elapsed = Mathf.Repeat(ShiftedPhase(barPhase) - humps[owner].start, 1f);
+        var elapsed = Mathf.Repeat(shiftedPhase - humps[owner].start, 1f);
         return Mathf.Clamp01(elapsed / span);
     }
 
@@ -472,14 +475,14 @@ public readonly struct Waveform
         Mathf.Repeat(barPhase - (offset / BeatsPerBar), 1f);
 
     /// <summary>
-    /// Finds the Hump slot holding a Bar Phase and how far through that slot it sits. Every sampling
-    /// kernel starts here so the three reads agree about which peak governs a phase.
+    /// Finds the Hump slot holding a shifted Bar Phase and how far through that slot it sits. Every
+    /// sampling kernel starts here so the three reads agree about which peak governs a phase.
     /// </summary>
-    /// <param name="barPhase">Position within the bar; wrapped and shifted by <see cref="offset"/>.</param>
+    /// <param name="shiftedPhase">Wrapped position in the Waveform's own offset frame.</param>
     /// <param name="index">The slot whose span contains the shifted phase.</param>
     /// <param name="slotProgress">Position through the slot in <c>[0..1)</c>: 0 on its peak, 0.5 at the trough.</param>
     /// <returns>False when no slot covers the phase, which only a malformed under-filled bar produces.</returns>
-    private bool TryLocateSlot(float barPhase, out int index, out float slotProgress)
+    private bool TryLocateSlot(float shiftedPhase, out int index, out float slotProgress)
     {
         index = -1;
         slotProgress = 0f;
@@ -488,17 +491,17 @@ public readonly struct Waveform
             return false;
         }
 
-        var lookup = ShiftedPhase(barPhase);
         for (var i = 0; i < humps.Length; i++)
         {
             var hump = humps[i];
-            if (hump.width <= 0f || lookup < hump.start || lookup >= hump.start + hump.width)
+            if (hump.width <= 0f || shiftedPhase < hump.start ||
+                shiftedPhase >= hump.start + hump.width)
             {
                 continue;
             }
 
             index = i;
-            slotProgress = (lookup - hump.start) / hump.width;
+            slotProgress = (shiftedPhase - hump.start) / hump.width;
             return true;
         }
 

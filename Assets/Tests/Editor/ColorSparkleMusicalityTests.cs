@@ -5,6 +5,9 @@ using UnityEngine;
 /// <summary>Verifies ColorSparkle's Waveform turn, activation Palette transitions, and glint state.</summary>
 public sealed class ColorSparkleMusicalityTests
 {
+    /// <summary>Floating-point tolerance for exact musicality contract assertions.</summary>
+    private const float Tolerance = 0.0001f;
+
     /// <summary>
     /// A qualifying multi-frame On Beat gate fires once on one absolute beat and can fire again
     /// after the Data Surface advances to the next beat.
@@ -28,14 +31,14 @@ public sealed class ColorSparkleMusicalityTests
     {
         var sparkle = ColorSparkle.SparkleState.Palette(0.8f);
 
-        Assert.That(sparkle.TurnedCoordinate(0f), Is.EqualTo(0.8f).Within(0.0001f));
-        Assert.That(sparkle.TurnedCoordinate(0.5f), Is.EqualTo(0.3f).Within(0.0001f));
-        Assert.That(sparkle.TurnedCoordinate(1f), Is.EqualTo(0.8f).Within(0.0001f));
+        Assert.That(sparkle.TurnedCoordinate(0f), Is.EqualTo(0.8f).Within(Tolerance));
+        Assert.That(sparkle.TurnedCoordinate(0.5f), Is.EqualTo(0.3f).Within(Tolerance));
+        Assert.That(sparkle.TurnedCoordinate(1f), Is.EqualTo(0.8f).Within(Tolerance));
 
         Color faded = sparkle.Advance(Color.red, Color.black, 0.5f);
-        Assert.That(faded.r, Is.EqualTo(0.5f).Within(0.0001f));
-        Assert.That(faded.g, Is.Zero.Within(0.0001f));
-        Assert.That(faded.b, Is.Zero.Within(0.0001f));
+        Assert.That(faded.r, Is.EqualTo(0.5f).Within(Tolerance));
+        Assert.That(faded.g, Is.Zero.Within(Tolerance));
+        Assert.That(faded.b, Is.Zero.Within(Tolerance));
     }
 
     /// <summary>
@@ -58,8 +61,8 @@ public sealed class ColorSparkleMusicalityTests
             {
                 Color.RGBToHSV(color, out float hue, out float saturation, out float value);
                 Assert.That(hue, Is.GreaterThanOrEqualTo(previousHue));
-                Assert.That(saturation, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(value, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(saturation, Is.EqualTo(1f).Within(Tolerance));
+                Assert.That(value, Is.EqualTo(1f).Within(Tolerance));
                 previousHue = hue;
             }
         }
@@ -85,7 +88,7 @@ public sealed class ColorSparkleMusicalityTests
         Assert.That(palette.CurrentPalette, Is.SameAs(current));
         Assert.That(palette.NextPalette, Is.SameAs(next));
         Assert.That(palette.IsTransitioning, Is.True);
-        Assert.That(palette.TransitionProgress, Is.Zero.Within(0.0001f));
+        Assert.That(palette.TransitionProgress, Is.Zero.Within(Tolerance));
         Assert.That(palette.Revision, Is.EqualTo(1));
         Assert.That(palette.ReadCyclic(0f), Is.EqualTo(Color.red));
     }
@@ -103,9 +106,9 @@ public sealed class ColorSparkleMusicalityTests
 
         effect.FadeFieldAndGlints(Color.black, 0f, 0.5f, true, 0.5f);
 
-        Assert.That(effect.buffer[0].r, Is.EqualTo(0.75f).Within(0.0001f));
-        Assert.That(effect.buffer[0].g, Is.EqualTo(0.75f).Within(0.0001f));
-        Assert.That(effect.buffer[0].b, Is.EqualTo(0.75f).Within(0.0001f));
+        Assert.That(effect.buffer[0].r, Is.EqualTo(0.75f).Within(Tolerance));
+        Assert.That(effect.buffer[0].g, Is.EqualTo(0.75f).Within(Tolerance));
+        Assert.That(effect.buffer[0].b, Is.EqualTo(0.75f).Within(Tolerance));
     }
 
     /// <summary>
@@ -173,13 +176,13 @@ public sealed class ColorSparkleMusicalityTests
             5f,
             out float resolvedFillWhiteChance);
 
-        Assert.That(resolvedRate, Is.EqualTo(75f).Within(0.0001f));
+        Assert.That(resolvedRate, Is.EqualTo(75f).Within(Tolerance));
         Assert.That(
             resolvedRate * resolvedFillWhiteChance,
-            Is.EqualTo(30f).Within(0.0001f));
+            Is.EqualTo(30f).Within(Tolerance));
         Assert.That(
             resolvedRate * (1f - resolvedFillWhiteChance),
-            Is.EqualTo(45f).Within(0.0001f));
+            Is.EqualTo(45f).Within(Tolerance));
     }
 
     /// <summary>
@@ -208,8 +211,8 @@ public sealed class ColorSparkleMusicalityTests
             4f,
             out _);
 
-        Assert.That(landingRate, Is.EqualTo(320f).Within(0.0001f));
-        Assert.That(halfRecoveryRate, Is.EqualTo(200f).Within(0.0001f));
+        Assert.That(landingRate, Is.EqualTo(320f).Within(Tolerance));
+        Assert.That(halfRecoveryRate, Is.EqualTo(200f).Within(Tolerance));
     }
 
     /// <summary>

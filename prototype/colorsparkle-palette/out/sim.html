@@ -373,7 +373,7 @@
         <div class="actions">
           <button class="primary" id="rollButton" type="button">Roll now</button>
           <button id="pauseButton" type="button">Pause</button>
-          <button id="resetButton" type="button">Reset to proposal</button>
+          <button id="resetButton" type="button">Reset audition</button>
         </div>
 
         <section class="control-group" aria-labelledby="colorHeading">
@@ -512,9 +512,9 @@
         </section>
 
         <details class="secondary">
-          <summary>Current shipped algorithm</summary>
+          <summary>Pre-redesign algorithm</summary>
           <label class="switch-row">
-            <span class="switch-copy"><span class="switch-name">Use shipped Standalone look</span><span class="switch-detail">Full-value HSV · 50/50 activation Roll · no palette or glints</span></span>
+            <span class="switch-copy"><span class="switch-name">Use pre-redesign Standalone look</span><span class="switch-detail">Full-value HSV · 50/50 activation Roll · no palette or glints</span></span>
             <input id="comparisonMode" type="checkbox">
           </label>
         </details>
@@ -868,7 +868,7 @@
           if (paletteHoldStepsRemaining === 0) advancePalette();
         }
 
-        function proposalRoll() {
+        function auditionRoll() {
           if (settings.variantLock !== "auto") {
             variant = settings.variantLock;
           } else if (Math.random() < settings.confettiChance) {
@@ -890,7 +890,7 @@
         }
 
         function roll() {
-          proposalRoll();
+          auditionRoll();
           currentRoll();
           rerollRemaining = settings.autoRerollSeconds;
           clearBuffer();
@@ -919,7 +919,7 @@
           return readAnimatedPalette(coordinate);
         }
 
-        function spawnProposalSparkle() {
+        function spawnAuditionSparkle() {
           const tileIndex = Math.floor(Math.random() * TILE_COUNT);
           const color = sparkleColor();
           if (Math.random() >= settings.glintChance) {
@@ -937,7 +937,7 @@
           writeTile(tileIndex, color);
         }
 
-        function proposalStep() {
+        function auditionStep() {
           const floor = floorColor();
           for (let tileIndex = 0; tileIndex < TILE_COUNT; tileIndex++) {
             const offset = tileIndex * 3;
@@ -950,7 +950,7 @@
           sparkleCarry += settings.sparklesPerSecond * FIXED_STEP;
           const count = Math.floor(sparkleCarry);
           sparkleCarry -= count;
-          for (let index = 0; index < count; index++) spawnProposalSparkle();
+          for (let index = 0; index < count; index++) spawnAuditionSparkle();
         }
 
         function currentStep() {
@@ -972,7 +972,7 @@
             if (rerollRemaining <= 0) roll();
           }
           if (settings.comparisonMode) currentStep();
-          else proposalStep();
+          else auditionStep();
         }
 
         function clearBuffer() {

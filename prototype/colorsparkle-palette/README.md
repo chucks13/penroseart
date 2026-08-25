@@ -1,14 +1,17 @@
 # PROTOTYPE: throwaway. Do not ship anything in this folder.
 
-Desk audition for the agreed ColorSparkle palette redesign. `build.py` reads the
-real Penrose layout and scene palettes, then writes one self-contained
-`out/sim.html`. The page opens from `file://` without a server or network access.
+Desk audition for the palette rebuild that informed the approved ColorSparkle
+design. `build.py` reads the real Penrose layout and scene palettes, then writes
+one self-contained `out/sim.html`. The page opens from `file://` without a server
+or network access. Its Neighbor-bloom experiment remains prototype behavior;
+the production Effect uses crisp one-Tile glints.
 
 ## The question
 
-Does ColorSparkle keep each palette color's luminance character when a sparkle
-is born, and do rare Neighbor blooms make dark glints legible without turning
-ordinary dark sparkles into bright points?
+The audition asked whether ColorSparkle could keep each palette color's
+luminance character at sparkle birth, and whether rare Neighbor blooms could
+make dark glints legible without turning ordinary dark sparkles into bright
+points.
 
 The page models one beat-still Effect. It does not read BeatManager, acquire a
 Waveform, or invent Fill, Drop, Energy, or Levels values. A **Tile** is one
@@ -18,10 +21,10 @@ and its activation-wide palette coordinate.
 
 ## Cold-load state
 
-Opening `out/sim.html` with no clicks starts the proposal at a fixed 60 Hz. The
+Opening `out/sim.html` with no clicks starts the audition at a fixed 60 Hz. The
 first two conditioned scene palettes begin their 3-second crossfade immediately.
 Palette auto-advance and automatic re-Roll are on. The variant lock is **Auto**,
-and the current shipped comparison is off.
+and the pre-redesign comparison is off.
 
 The baked `DEFAULTS` object contains the values stated in the brief:
 
@@ -41,7 +44,7 @@ The baked `DEFAULTS` object contains the values stated in the brief:
 | Variant lock | `auto` |
 | Automatic re-Roll | on |
 | Palette auto-advance | on |
-| Current shipped comparison | off |
+| Pre-redesign comparison | off |
 
 The brief names the conditioning controls but does not assign their defaults.
 The page starts from the Angles Standalone preset already used by
@@ -87,7 +90,7 @@ Neighbor links, 17 serialized palette definitions, and 16 unique palettes.
    blends the results. This is the order used by
    `ConditionedPaletteCache.ReadCyclic`.
 
-5. The proposal uses a 60 Hz fixed-step Buffer. Every step retains
+5. The audition uses a 60 Hz fixed-step Buffer. Every step retains
    `fadePerFrame` of each Tile's distance from the floor color. The floor color is
    the darkest entry in the current entry-by-entry crossfade, multiplied by
    `floorLevel`. A fractional birth accumulator produces a uniform cadence for
@@ -107,11 +110,12 @@ Neighbor links, 17 serialized palette definitions, and 16 unique palettes.
    saturation only when full value at the authored saturation cannot reach the
    requested luminance.
 
-8. The collapsed **Current shipped algorithm** group enables the exact shipped
-   Standalone lane at the requested fixed 60 Hz. Each Buffer frame multiplies all
-   colors by `0.98`, calculates `int((1 / 60) * 900) == 15` births, and writes
-   full-saturation, full-value HSV to random Tiles. Its Roll uses the shipped
-   `Random.value > 0.5` split. The single-color lane rolls activation hue in
+8. The collapsed **Pre-redesign algorithm** group enables the Standalone lane
+   captured when this audition was built, at the requested fixed 60 Hz. Each
+   Buffer frame multiplies all colors by `0.98`, calculates
+   `int((1 / 60) * 900) == 15` births, and writes full-saturation, full-value HSV
+   to random Tiles. Its Roll uses the captured `Random.value > 0.5` split. The
+   single-color lane rolls activation hue in
    `0..1`, adds the Standalone Waveform fallback endpoint `1`, and applies
    `% 0.15`. The random lane rolls a fresh full-wheel hue for every birth.
 
@@ -152,9 +156,10 @@ and `GPalette.cs`:
 - Browser `Math.random()` supplies every Roll, Tile, coordinate, hue, and glint
   choice. It does not reproduce Unity's random sequence or consumption order.
 
-The dark-glint luminance solve, floor selection during a palette crossfade,
-sequential palette hold, and redesigned sparkle variants have no current C#
-counterpart. They are proposal behavior, not ports of `GPalette` or `AnimPalette`.
+The dark-glint Neighbor-bloom solve and sequential palette hold remain desk-only.
+Floor selection during a palette crossfade and the palette/confetti coordinate
+variants now have production counterparts, but this page retains the audition's
+algorithms and settings rather than sharing runtime code.
 
 ## Regenerate
 
@@ -181,10 +186,10 @@ is required.
   entries and the dark-core glint need judgment on the wall.
 - Canvas has no physical light spill. A dark glint's Neighbor bloom can read more
   separate from its core here than it will on the installation.
-- The fixed 60 Hz desk cadence answers the agreed audition question. A variable
-  Unity render rate would change the shipped per-frame fade and integer birth
-  truncation unless the production redesign also adopts fixed-step accounting.
-- The comparison covers the shipped Standalone lane. It intentionally does not
+- The fixed 60 Hz desk cadence answers the original audition question. Production
+  uses rendered-frame deltas for birth carry and per-frame fade, so this page did
+  not establish cadence equivalence with the wall.
+- The comparison covers the pre-redesign Standalone lane. It intentionally does not
   simulate Synced Mode, Fill, or Drop because the brief excludes beat data from
   this audition.
 - Browser random sequences change the balance of palette regions and the timing

@@ -60,7 +60,7 @@ public struct PaletteConditioning
 
     /// <summary>Returns whether every conditioning control exactly matches another live settings value.</summary>
     /// <param name="other">The value to compare without boxing or heap allocation.</param>
-    public readonly bool Matches(PaletteConditioning other) =>
+    public readonly bool Matches(in PaletteConditioning other) =>
         TargetLuminance == other.TargetLuminance &&
         MinimumLuminance == other.MinimumLuminance &&
         LuminanceEqualization == other.LuminanceEqualization &&
@@ -145,7 +145,7 @@ public class GPalette
         for (int i = 0; i < length; i++)
         {
             uint raw = uint.Parse(colors[i], System.Globalization.NumberStyles.AllowHexSpecifier);
-            values[i] = new Color32((byte)(raw >> 16), (byte)(raw >> 8), (byte)(raw), 0);
+            values[i] = new Color32((byte)(raw >> 16), (byte)(raw >> 8), (byte)raw, 0);
         }
         return values;
     }
@@ -380,13 +380,13 @@ public class GPalette
         var anchors = new List<Color>(colors.Length) { colors[0] };
         for (int i = 1; i < colors.Length; i++)
         {
-            if (PaletteDistance(anchors[anchors.Count - 1], colors[i]) >= threshold)
+            if (PaletteDistance(anchors[^1], colors[i]) >= threshold)
             {
                 anchors.Add(colors[i]);
             }
         }
 
-        if (anchors.Count > 1 && PaletteDistance(anchors[anchors.Count - 1], anchors[0]) < threshold)
+        if (anchors.Count > 1 && PaletteDistance(anchors[^1], anchors[0]) < threshold)
         {
             anchors.RemoveAt(anchors.Count - 1);
         }
@@ -506,7 +506,7 @@ public class GPalette
         // find color in list
         if (length > 1)
         {
-            float scaled = i * (float)(length - 1);
+            float scaled = i * (length - 1);
             int first = Mathf.FloorToInt(scaled);
             float fract = scaled % 1f;
             if (!blend)
@@ -814,7 +814,7 @@ public class AnimPalette
             // do the mapping
             for (int x = 0; x < dest.Length; x++)        // for each output color
             {
-                float f = (float)x / (float)dest.Length;       // position in color table
+                float f = (float)x / dest.Length;       // position in color table
                 dest[x] = Map2Palette(f, source);
             }
             palettes.Add(new GPalette(dest));
@@ -872,8 +872,10 @@ public class AnimPalette
             {
                 break;
             }
-            table[y] = new colortab();
-            table[y].i = float.Parse(subs[x++]) / 255f;
+            table[y] = new colortab
+            {
+                i = float.Parse(subs[x++]) / 255f,
+            };
             byte r = byte.Parse(subs[x++]);
             byte g = byte.Parse(subs[x++]);
             byte b = byte.Parse(subs[x++]);
@@ -933,13 +935,13 @@ public sealed class ConditionedPaletteCache
     /// </summary>
     /// <param name="paletteOwner">The shared animated palette whose immutable endpoints are conditioned.</param>
     /// <param name="conditioning">The Effect-owned live controls applied to both endpoints.</param>
-    public void Refresh(AnimPalette paletteOwner, PaletteConditioning conditioning)
+    public void Refresh(AnimPalette paletteOwner, in PaletteConditioning conditioning)
     {
         isTransitioning = paletteOwner.IsTransitioning;
         transitionProgress = paletteOwner.TransitionProgress;
 
         bool ownerChanged = !ReferenceEquals(paletteOwner, owner);
-        bool settingsChanged = ownerChanged || !settings.Matches(conditioning);
+        bool settingsChanged = ownerChanged || !settings.Matches(in conditioning);
         bool revisionChanged = ownerChanged || paletteOwner.Revision != revision;
         if (!settingsChanged && !revisionChanged)
         {

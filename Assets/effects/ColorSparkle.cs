@@ -652,7 +652,9 @@ public class ColorSparkle : EffectBase
     public override void Draw()
     {
         bool isSynced = beatManager.IsSynced;
-        string requestedWaveformName = SyncSettings.WaveformName;
+        ColorSparkleSyncSettings sync = SyncSettings;
+        ColorSparkleStandaloneSettings standalone = standaloneSettings;
+        string requestedWaveformName = sync.WaveformName;
         if (requestedWaveformName != acquiredWaveformName)
         {
             waveform = waveforms.Named(requestedWaveformName);
@@ -661,28 +663,27 @@ public class ColorSparkle : EffectBase
 
         if (isSynced != wasSynced)
         {
-            ResetGlints();
+            Array.Clear(glints, 0, glints.Length);
             sparkleRateBeat = null;
             lastGlintBeat = null;
             lastGlintCount = 0;
             wasSynced = isSynced;
         }
 
-        bool dropActive = false;
         bool dropStarted = false;
         bool fillActive = false;
         dropStarveEnvelope = 0f;
         dropRecoverEnvelope = 0f;
         if (isSynced)
         {
-            dropActive = beatManager.Drop.Active;
+            bool dropActive = beatManager.Drop.Active;
             dropStarted = dropActive && !previousDropActive;
             previousDropActive = dropActive;
             fillActive = beatManager.Fill.Active;
             dropStarveEnvelope = beatManager.Drop.Before.Build(
-                SyncSettings.DropStarveBeats);
+                sync.DropStarveBeats);
             dropRecoverEnvelope = beatManager.Drop.In.Decay(
-                SyncSettings.DropRecoverBeats);
+                sync.DropRecoverBeats);
         }
         else
         {
@@ -690,25 +691,25 @@ public class ColorSparkle : EffectBase
         }
 
         FloatRange coordinateRange = isSynced
-            ? SyncSettings.CoordinateRange
-            : standaloneSettings.CoordinateRange;
+            ? sync.CoordinateRange
+            : standalone.CoordinateRange;
         float floorLevel = isSynced
-            ? SyncSettings.FloorLevel
-            : standaloneSettings.FloorLevel;
+            ? sync.FloorLevel
+            : standalone.FloorLevel;
         float fadePerFrame = isSynced
             ? Mathf.Lerp(
-                SyncSettings.FadePerFrame,
-                SyncSettings.DropFadePerFrame,
+                sync.FadePerFrame,
+                sync.DropFadePerFrame,
                 dropRecoverEnvelope)
-            : standaloneSettings.FadePerFrame;
+            : standalone.FadePerFrame;
         PaletteConditioning paletteConditioning = isSynced
-            ? SyncSettings.PaletteConditioning
-            : standaloneSettings.PaletteConditioning;
+            ? sync.PaletteConditioning
+            : standalone.PaletteConditioning;
         if (!ReferenceEquals(activationPalette, APalette))
         {
             activationPalette.Update();
         }
-        conditionedPalette.Refresh(activationPalette, paletteConditioning);
+        conditionedPalette.Refresh(activationPalette, in paletteConditioning);
         float turnProgress = waveform.TroughToTroughProgress;
 
         float sparklesPerSecond;
@@ -718,8 +719,8 @@ public class ColorSparkle : EffectBase
             Energy energy = beatManager.Energy.Level.Value;
             liveEnergy = energy;
             levelsDriveReading = ReadLevel(
-                SyncSettings.LevelsDriveBand,
-                SyncSettings.LevelsDriveForm);
+                sync.LevelsDriveBand,
+                sync.LevelsDriveForm);
             float tierSparklesPerSecond = ResolveTierSparklesPerSecond(
                 energy,
                 beatManager.Timing.Beat.Value,
@@ -727,18 +728,18 @@ public class ColorSparkle : EffectBase
             sparklesPerSecond = ResolveSyncedSparklesPerSecond(
                 tierSparklesPerSecond,
                 dropStarveEnvelope,
-                SyncSettings.DropStarveFloor,
+                sync.DropStarveFloor,
                 fillActive,
-                SyncSettings.FillWhiteChance,
+                sync.FillWhiteChance,
                 dropRecoverEnvelope,
-                SyncSettings.DropFloodMultiplier,
+                sync.DropFloodMultiplier,
                 out fillWhiteChance);
         }
         else
         {
             liveEnergy = null;
             levelsDriveReading = 0f;
-            sparklesPerSecond = standaloneSettings.SparklesPerSecond;
+            sparklesPerSecond = standalone.SparklesPerSecond;
         }
 
         Color floorColor = FindDarkestConditionedPaletteColor() * floorLevel;
@@ -758,7 +759,7 @@ public class ColorSparkle : EffectBase
             bool fillWhite = fillActive && Random.value < fillWhiteChance;
             if (fillWhite)
             {
-                SpawnFixedSparkle(SyncSettings.FillSparkleColor, turnProgress);
+                SpawnFixedSparkle(sync.FillSparkleColor, turnProgress);
                 continue;
             }
 
@@ -771,8 +772,8 @@ public class ColorSparkle : EffectBase
             {
                 SpawnStandalonePaletteSparkle(
                     coordinate,
-                    standaloneSettings.GlintChance,
-                    standaloneSettings.GlintLuminance,
+                    standalone.GlintChance,
+                    standalone.GlintLuminance,
                     turnProgress);
             }
         }
@@ -782,8 +783,8 @@ public class ColorSparkle : EffectBase
             if (dropStarted)
             {
                 int impactCount = Random.Range(
-                    SyncSettings.DropImpactGlints.MinInclusive,
-                    SyncSettings.DropImpactGlints.MaxExclusive);
+                    sync.DropImpactGlints.MinInclusive,
+                    sync.DropImpactGlints.MaxExclusive);
                 lastGlintCount = impactCount;
                 FireGlints(impactCount, coordinateRange);
             }
@@ -969,16 +970,18 @@ public class ColorSparkle : EffectBase
     private void FireGlints(int count, FloatRange coordinateRange)
     {
         float beatSeconds = beatManager.Timing.BeatAverageMilliseconds.Value / 1000f;
+        FloatRange luminanceRange = SyncSettings.GlintLuminance;
+        FloatRange fadeRange = SyncSettings.GlintFadeBeats;
         for (int i = 0; i < count; i++)
         {
             int tileIndex = Random.Range(0, buffer.Length);
             float coordinate = RollSparkleCoordinate(coordinateRange);
             float luminance = Random.Range(
-                SyncSettings.GlintLuminance.Min,
-                SyncSettings.GlintLuminance.Max);
+                luminanceRange.Min,
+                luminanceRange.Max);
             float fadeBeats = Random.Range(
-                SyncSettings.GlintFadeBeats.Min,
-                SyncSettings.GlintFadeBeats.Max);
+                fadeRange.Min,
+                fadeRange.Max);
             Color color = SetLuminance(
                 ReadActivationPalette(coordinate),
                 luminance);
@@ -1010,12 +1013,6 @@ public class ColorSparkle : EffectBase
         return true;
     }
 
-    /// <summary>Clears every per-Tile glint clock for activation or a mode change.</summary>
-    internal void ResetGlints()
-    {
-        glints = new GlintState[buffer.Length];
-    }
-
     /// <summary>Clears every field sparkle and glint for a fresh activation.</summary>
     internal void ResetSparklesAndGlints()
     {
@@ -1041,17 +1038,18 @@ public class ColorSparkle : EffectBase
     {
         for (int tileIndex = 0; tileIndex < buffer.Length; tileIndex++)
         {
-            if (renderGlints && glints[tileIndex].Active)
+            ref GlintState glint = ref glints[tileIndex];
+            ref SparkleState sparkle = ref sparkles[tileIndex];
+            if (renderGlints && glint.Active)
             {
-                buffer[tileIndex] = glints[tileIndex].Advance(floorColor, deltaSeconds);
+                buffer[tileIndex] = glint.Advance(floorColor, deltaSeconds);
             }
-            else if (sparkles[tileIndex].Active)
+            else if (sparkle.Active)
             {
-                SparkleState sparkle = sparkles[tileIndex];
                 Color color = sparkle.FollowsPalette
                     ? ReadActivationPalette(sparkle.TurnedCoordinate(turnProgress))
                     : sparkle.FixedColor;
-                buffer[tileIndex] = sparkles[tileIndex].Advance(
+                buffer[tileIndex] = sparkle.Advance(
                     color,
                     floorColor,
                     fadePerFrame);
@@ -1082,7 +1080,7 @@ public class ColorSparkle : EffectBase
     /// <returns>True when the sparkle was written; false while a glint protects the Tile.</returns>
     internal bool TryStartSparkle(
         int tileIndex,
-        SparkleState sparkle,
+        in SparkleState sparkle,
         float turnProgress)
     {
         if (glints[tileIndex].Active)
@@ -1103,10 +1101,9 @@ public class ColorSparkle : EffectBase
     /// <param name="turnProgress">Current trough-to-trough progress for its birth frame.</param>
     private void SpawnSyncedPaletteSparkle(float coordinate, float turnProgress)
     {
-        TryStartSparkle(
-            Random.Range(0, buffer.Length),
-            SparkleState.Palette(coordinate),
-            turnProgress);
+        int tileIndex = Random.Range(0, buffer.Length);
+        SparkleState sparkle = SparkleState.Palette(coordinate);
+        TryStartSparkle(tileIndex, in sparkle, turnProgress);
     }
 
     /// <summary>Selects one random Tile for a fixed Fill-white field sparkle.</summary>
@@ -1114,10 +1111,9 @@ public class ColorSparkle : EffectBase
     /// <param name="turnProgress">Current trough-to-trough progress, ignored by fixed sparkles.</param>
     private void SpawnFixedSparkle(Color color, float turnProgress)
     {
-        TryStartSparkle(
-            Random.Range(0, buffer.Length),
-            SparkleState.Fixed(color),
-            turnProgress);
+        int tileIndex = Random.Range(0, buffer.Length);
+        SparkleState sparkle = SparkleState.Fixed(color);
+        TryStartSparkle(tileIndex, in sparkle, turnProgress);
     }
 
     /// <summary>Returns the activation's held coordinate or rolls one scatter coordinate.</summary>
@@ -1209,7 +1205,7 @@ public class ColorSparkle : EffectBase
                 glintLuminance));
         }
 
-        TryStartSparkle(tileIndex, sparkle, turnProgress);
+        TryStartSparkle(tileIndex, in sparkle, turnProgress);
     }
 
     /// <summary>
