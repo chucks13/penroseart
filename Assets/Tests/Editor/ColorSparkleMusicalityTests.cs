@@ -2,7 +2,7 @@
 using NUnit.Framework;
 using UnityEngine;
 
-/// <summary>Verifies ColorSparkle's Waveform turn, activation Palette, and glint state.</summary>
+/// <summary>Verifies ColorSparkle's Waveform turn, activation Palette transitions, and glint state.</summary>
 public sealed class ColorSparkleMusicalityTests
 {
     /// <summary>
@@ -67,6 +67,27 @@ public sealed class ColorSparkleMusicalityTests
         {
             Random.state = priorRandomState;
         }
+    }
+
+    /// <summary>
+    /// A generated Palette can be the initial AnimPalette endpoint, then a supplied replacement
+    /// starts the same transition contract used by the shared Palette.
+    /// </summary>
+    [Test]
+    public void ColorSparkleGeneratedPaletteUsesAnimPaletteTransition()
+    {
+        var current = new GPalette(new[] { Color.red, Color.green });
+        var next = new GPalette(new[] { Color.blue, Color.white });
+        var palette = new AnimPalette(current);
+
+        palette.Change(next);
+
+        Assert.That(palette.CurrentPalette, Is.SameAs(current));
+        Assert.That(palette.NextPalette, Is.SameAs(next));
+        Assert.That(palette.IsTransitioning, Is.True);
+        Assert.That(palette.TransitionProgress, Is.Zero.Within(0.0001f));
+        Assert.That(palette.Revision, Is.EqualTo(1));
+        Assert.That(palette.ReadCyclic(0f), Is.EqualTo(Color.red));
     }
 
     /// <summary>

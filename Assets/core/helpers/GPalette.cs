@@ -594,6 +594,13 @@ public class AnimPalette
         "000000,330000,660000,990000,CC0000,FF0000,FF3300,FF6600,FF9900,FFCC00,FFFF00,FFFF33,FFFF66,FFFF99,FFFFCC,FFFFFF",
     };
 
+    /// <summary>Holds a supplied Palette as the initial endpoint without loading a palette set.</summary>
+    /// <param name="initialPalette">The Palette this animated value initially displays.</param>
+    public AnimPalette(GPalette initialPalette)
+    {
+        current = initialPalette;
+    }
+
     /// <summary>Loads the built-in fallback palettes.</summary>
     public AnimPalette()
         : this(string.Empty)
@@ -643,7 +650,20 @@ public class AnimPalette
     {
         if (tween == 0f)
         {
-            next = palettes[Random.Range(0, palettes.Count)];
+            Change(palettes[Random.Range(0, palettes.Count)]);
+        }
+    }
+
+    /// <summary>
+    /// Starts the same three-second transition toward a caller-supplied Palette, allowing generated
+    /// palettes to use the animated Palette path without joining the loaded palette set.
+    /// </summary>
+    /// <param name="palette">The supplied Palette to display after the transition.</param>
+    public void Change(GPalette palette)
+    {
+        if (tween == 0f)
+        {
+            next = palette;
             tween = transitionTime;
             Revision++;
         }

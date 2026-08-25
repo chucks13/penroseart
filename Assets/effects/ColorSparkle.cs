@@ -5,7 +5,8 @@ using Random = UnityEngine.Random;
 /// <summary>
 /// Maintains a fading Palette sparkle field with rare bright glints over the previous Buffer.
 /// A sparkle is one Tile born at its Palette color, fading with the field. A glint is a bright
-/// sparkle: the same hue the sparkle would have had on that Tile, lifted to glint luminance.
+/// sparkle: the same hue the sparkle would have had on that Tile, lifted to glint luminance. Every
+/// colour in one activation reads its single shared or generated animated Palette.
 /// </summary>
 [EffectSyncSettings(typeof(ColorSparkleSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(ColorSparkleStandaloneSettingsAsset))]
@@ -388,25 +389,13 @@ public class ColorSparkle : EffectBase
     private ColorSparkleSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
     /// <summary>
-    /// Effect-local conditioned palette endpoints that follow the shared palette revision,
-    /// crossfade, and active mode's live controls.
+    /// Effect-local conditioned Palette endpoints that follow the activation Palette's revision,
+    /// crossfade, owner swaps, and active mode's live controls.
     /// </summary>
     private readonly ConditionedPaletteCache conditionedPalette = new();
 
-    /// <summary>Raw random hues rolled when the activation Roll selects confetti.</summary>
-    private GPalette confettiSource;
-
-    /// <summary>
-    /// The confetti Palette every read uses: <see cref="confettiSource"/> conditioned with the same
-    /// live controls as the shared Palette, so confetti and the shared Palette share one look.
-    /// </summary>
-    private GPalette confettiPalette;
-
-    /// <summary>The live conditioning controls <see cref="confettiPalette"/> was derived with.</summary>
-    private PaletteConditioning confettiConditioning;
-
-    /// <summary>Whether every activation Palette read comes from the held confetti Palette.</summary>
-    private bool usesConfettiPalette;
+    /// <summary>The one shared or Effect-local animated Palette held by the current activation.</summary>
+    private AnimPalette activationPalette;
 
     /// <summary>The activation's single-or-scatter coordinate policy.</summary>
     private CoordinatePolicy coordinatePolicy;
@@ -466,7 +455,9 @@ public class ColorSparkle : EffectBase
     /// </summary>
     public override string DebugText()
     {
-        string paletteName = usesConfettiPalette ? "Confetti" : "Shared";
+        string paletteName = ReferenceEquals(activationPalette, APalette)
+            ? "Shared"
+            : "Confetti";
         string coordinate = coordinatePolicy == CoordinatePolicy.Single
             ? $"single {singlePaletteCoordinate:0.00}"
             : "scatter";
@@ -498,6 +489,7 @@ public class ColorSparkle : EffectBase
         FloatRange coordinateRange = isSynced
             ? SyncSettings.CoordinateRange
             : standaloneSettings.CoordinateRange;
+        activationPalette = APalette;
         RollActivationPalette(confettiChance, confettiPaletteSize);
         RollCoordinatePolicy(coordinateRange);
         dropHue = Random.Range(SyncSettings.DropHue.Min, SyncSettings.DropHue.Max);
@@ -522,25 +514,39 @@ public class ColorSparkle : EffectBase
     }
 
     /// <summary>
-    /// Rolls the activation's Palette source and builds its fixed sorted confetti Palette when
-    /// selected. Settings resolution happens before this method and consumes no Random.
+    /// Rolls the activation's one animated Palette. A generated Palette starts immediately after an
+    /// activation or cross-fades from the previous generated Palette at a Grid Boundary; the shared
+    /// outcome asks the wall's Palette for a fresh loaded endpoint. Settings resolution happens
+    /// before this method and consumes no Random.
     /// </summary>
     /// <param name="confettiChance">Chance that this activation uses a confetti Palette.</param>
     /// <param name="confettiPaletteSize">Number of random hues in the confetti Palette.</param>
     private void RollActivationPalette(float confettiChance, int confettiPaletteSize)
     {
-        usesConfettiPalette = Random.value < confettiChance;
-        confettiSource = usesConfettiPalette
-            ? CreateConfettiPalette(confettiPaletteSize)
-            : null;
-        confettiPalette = null;
+        bool useConfettiPalette = Random.value < confettiChance;
+        if (useConfettiPalette)
+        {
+            GPalette generatedPalette = CreateConfettiPalette(confettiPaletteSize);
+            if (!ReferenceEquals(activationPalette, APalette))
+            {
+                activationPalette.Change(generatedPalette);
+            }
+            else
+            {
+                activationPalette = new AnimPalette(generatedPalette);
+            }
+            return;
+        }
+
+        APalette.Change();
+        activationPalette = APalette;
     }
 
     /// <summary>
     /// On each Grid Boundary, rolls whether the activation's Palette is rolled again, so a long
     /// activation keeps turning its colours over as Tunnel and Julia do. The roll is the activation
-    /// Palette roll itself: confetti is one Palette it can land on, and any other outcome is a fresh
-    /// shared palette. The Grid exists only in Synced Mode, so Standalone never reaches this hook.
+    /// Palette roll itself, so both outcomes use the same roll and the Grid exists only in Synced
+    /// Mode. Standalone never reaches this hook.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -550,32 +556,11 @@ public class ColorSparkle : EffectBase
         }
 
         RollActivationPalette(SyncSettings.ConfettiChance, SyncSettings.ConfettiPaletteSize);
-        if (!usesConfettiPalette)
-        {
-            APalette.Change();
-        }
     }
 
-    /// <summary>
-    /// Conditions the held confetti source with the live controls, redoing the work only when the
-    /// controls change so a Play Mode edit reaches confetti without a new activation.
-    /// </summary>
-    /// <param name="conditioning">The surface's live conditioning controls this frame.</param>
-    private void RefreshConfettiPalette(PaletteConditioning conditioning)
-    {
-        if (!usesConfettiPalette ||
-            (confettiPalette != null && confettiConditioning.Matches(conditioning)))
-        {
-            return;
-        }
-
-        confettiPalette = confettiSource.Conditioned(conditioning);
-        confettiConditioning = conditioning;
-    }
-
-    /// <summary>Builds one raw confetti Palette from sorted full-saturation, full-value random hues.</summary>
+    /// <summary>Builds one confetti Palette endpoint from sorted full-saturation, full-value random hues.</summary>
     /// <param name="size">Number of random Palette entries.</param>
-    /// <returns>The fixed confetti Palette for one activation.</returns>
+    /// <returns>A generated Palette endpoint for the activation's animated Palette.</returns>
     internal static GPalette CreateConfettiPalette(int size)
     {
         var hues = new float[size];
@@ -650,8 +635,11 @@ public class ColorSparkle : EffectBase
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
-        conditionedPalette.Refresh(APalette, paletteConditioning);
-        RefreshConfettiPalette(paletteConditioning);
+        if (!ReferenceEquals(activationPalette, APalette))
+        {
+            activationPalette.Update();
+        }
+        conditionedPalette.Refresh(activationPalette, paletteConditioning);
         float turnProgress = waveform.TroughToTroughProgress;
 
         float sparklesPerSecond;
@@ -994,19 +982,18 @@ public class ColorSparkle : EffectBase
     /// <summary>Reads one cyclic coordinate from the activation's single Palette path.</summary>
     /// <param name="coordinate">The cyclic Palette coordinate.</param>
     /// <returns>The blended activation Palette color at that coordinate.</returns>
-    private Color ReadActivationPalette(float coordinate) => usesConfettiPalette
-        ? confettiPalette.ReadCyclic(coordinate, doblend: true)
-        : conditionedPalette.ReadCyclic(coordinate, doblend: true);
+    private Color ReadActivationPalette(float coordinate) =>
+        conditionedPalette.ReadCyclic(coordinate, doblend: true);
 
     /// <summary>
-    /// Finds the darkest color in the active conditioned palette crossfade. Scanning every cyclic
-    /// endpoint coordinate from both source tables covers every piecewise-linear segment endpoint,
-    /// where relative luminance reaches its minimum.
+    /// Finds the darkest color in the conditioned activation Palette crossfade. Scanning every
+    /// cyclic endpoint coordinate from both source tables covers every piecewise-linear segment
+    /// endpoint, where relative luminance reaches its minimum.
     /// </summary>
     /// <returns>The darkest live conditioned palette color.</returns>
     private Color FindDarkestConditionedPaletteColor()
     {
-        GPalette current = APalette.CurrentPalette;
+        GPalette current = activationPalette.CurrentPalette;
         Color darkest = conditionedPalette.ReadCyclic(0f, doblend: true);
         float darkestLuminance = darkest.RelativeLuminance();
 
@@ -1023,9 +1010,9 @@ public class ColorSparkle : EffectBase
             }
         }
 
-        if (APalette.IsTransitioning)
+        if (activationPalette.IsTransitioning)
         {
-            GPalette next = APalette.NextPalette;
+            GPalette next = activationPalette.NextPalette;
             for (int i = 0; i < next.length; i++)
             {
                 Color candidate = conditionedPalette.ReadCyclic(
