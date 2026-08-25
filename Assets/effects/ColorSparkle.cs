@@ -537,13 +537,20 @@ public class ColorSparkle : EffectBase
     }
 
     /// <summary>
-    /// On each Grid Boundary, rolls whether the shared palette changes, so a long activation keeps
-    /// turning its colours over as Tunnel and Julia do. The Grid exists only in Synced Mode, so
-    /// Standalone never reaches this hook.
+    /// On each Grid Boundary, rolls whether the activation's Palette is rolled again, so a long
+    /// activation keeps turning its colours over as Tunnel and Julia do. The roll is the activation
+    /// Palette roll itself: confetti is one Palette it can land on, and any other outcome is a fresh
+    /// shared palette. The Grid exists only in Synced Mode, so Standalone never reaches this hook.
     /// </summary>
     protected override void OnNewGrid()
     {
-        if (Random.value < SyncSettings.GridPaletteChangeChance)
+        if (Random.value >= SyncSettings.GridPaletteChangeChance)
+        {
+            return;
+        }
+
+        RollActivationPalette(SyncSettings.ConfettiChance, SyncSettings.ConfettiPaletteSize);
+        if (!usesConfettiPalette)
         {
             APalette.Change();
         }
@@ -1186,8 +1193,9 @@ public sealed class ColorSparkleSyncSettings
     public FloatRange CoordinateRange;
 
     /// <summary>
-    /// Chance that each Grid Boundary changes the shared palette, cross-fading every living sparkle
-    /// to the new colours. A confetti activation keeps its own Palette and shows only the floor move.
+    /// Chance that each Grid Boundary rolls the activation's Palette again: confetti by
+    /// <see cref="ConfettiChance"/>, otherwise a fresh shared palette. Every living sparkle takes
+    /// the new colours.
     /// </summary>
     [Range(0f, 1f)] public float GridPaletteChangeChance;
 
