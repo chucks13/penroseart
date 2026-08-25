@@ -18,10 +18,10 @@ MonoBehaviour:
     ConfettiPaletteSize: 16
     CoordinateRange:
       Min: 0
-      Max: 1
+      Max: 0.15
       LowRail: 0
-      HighRail: 1
-    GridPaletteChangeChance: 0.6666
+      HighRail: 0.5
+    GridPaletteChangeChance: 0.75
     LowSparklesPerSecond:
       Min: 400
       Max: 600
@@ -53,7 +53,7 @@ MonoBehaviour:
       LowRail: 100
       HighRail: 200
     LevelsDrive: 1
-    LevelsDriveBand: 1
+    LevelsDriveBand: 0
     LevelsDriveForm: 1
     GlintGateBand: 0
     GlintGateForm: 1
@@ -69,7 +69,7 @@ MonoBehaviour:
       LowRail: 0.5
       HighRail: 1
     FloorLevel: 0
-    FadePerFrame: 0.98
+    FadePerFrame: 0.975
     PaletteConditioning:
       TargetLuminance: 0.5
       MinimumLuminance: 0.12
@@ -86,9 +86,9 @@ MonoBehaviour:
       MaxExclusive: 300
       LowRail: 200
       HighRail: 300
-    DropFloodMultiplier: 3
+    DropFloodMultiplier: 4
     DropRecoverBeats: 16
-    DropFadePerFrame: 0.99
+    DropFadePerFrame: 0.999
     FillWhiteChance: 0.75
     FillSparkleColor: {r: 1, g: 1, b: 1, a: 1}
     WaveformName: beats 2 and 4

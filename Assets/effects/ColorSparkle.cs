@@ -74,12 +74,17 @@ public class ColorSparkle : EffectBase
 
     /// <summary>
     /// Authored maximum cyclic palette coordinate for Synced palette variants, tuned at the wall to
-    /// the whole palette once the conditioned confetti and the 2-and-4 turn landed.
+    /// a narrow window. A scatter over the whole palette is invariant under the 2-and-4 turn (every
+    /// Tile changes colour, the field does not), so the window is what lets the turn read as the
+    /// field moving through the palette as one band.
     /// </summary>
-    private const float SyncCoordinateMax = 1f;
+    private const float SyncCoordinateMax = 0.15f;
+
+    /// <summary>Authored upper Rail for the Synced coordinate window, stretched at the wall past the window itself.</summary>
+    private const float SyncCoordinateHighRail = 0.5f;
 
     /// <summary>Authored chance that each Grid Boundary rolls the activation's Palette again, tuned at the wall to two in three.</summary>
-    private const float SyncGridPaletteChangeChance = 0.6666f;
+    private const float SyncGridPaletteChangeChance = 0.75f;
 
     /// <summary>Authored minimum Synced sparkle rate while Energy is Low, tuned at the wall.</summary>
     private const float SyncLowSparklesPerSecondMin = 400f;
@@ -121,7 +126,7 @@ public class ColorSparkle : EffectBase
     private const bool SyncLevelsDrive = true;
 
     /// <summary>Authored Levels band that places Synced sparkle rates and glint counts.</summary>
-    private const Band SyncLevelsDriveBand = Band.Mid;
+    private const Band SyncLevelsDriveBand = Band.Low;
 
     /// <summary>Authored Levels form that places Synced sparkle rates and glint counts, tuned at the wall.</summary>
     private const LevelsForm SyncLevelsDriveForm = LevelsForm.Smoothed;
@@ -155,7 +160,7 @@ public class ColorSparkle : EffectBase
     /// tuned at the wall. The 0.98 Rail ceiling preserves the original lifetime; tuning can only
     /// shorten it.
     /// </summary>
-    private const float SyncFadePerFrame = 0.98f;
+    private const float SyncFadePerFrame = 0.975f;
 
     /// <summary>
     /// Sync palette conditioning is independently live so tuning cannot drift the Standalone look.
@@ -187,13 +192,13 @@ public class ColorSparkle : EffectBase
     private const int SyncDropImpactGlintsMaxExclusive = 300;
 
     /// <summary>Authored Energy-tier birth-rate multiplier at the Drop landing.</summary>
-    private const float SyncDropFloodMultiplier = 3f;
+    private const float SyncDropFloodMultiplier = 4f;
 
     /// <summary>Authored Drop recovery window over which birth rate and field fade return to normal.</summary>
     private const int SyncDropRecoverBeats = 16;
 
     /// <summary>Authored fraction of each Tile's distance from the floor retained at the Drop landing.</summary>
-    private const float SyncDropFadePerFrame = 0.99f;
+    private const float SyncDropFadePerFrame = 0.999f;
 
     /// <summary>Authored chance that a newly generated Fill sparkle is born the Fill colour, tuned at the wall.</summary>
     private const float SyncFillWhiteChance = 0.75f;
@@ -357,7 +362,9 @@ public class ColorSparkle : EffectBase
         ConfettiPaletteSize = SyncConfettiPaletteSize,
         CoordinateRange = new FloatRange(
             SyncCoordinateMin,
-            SyncCoordinateMax),
+            SyncCoordinateMax,
+            SyncCoordinateMin,
+            SyncCoordinateHighRail),
         GridPaletteChangeChance = SyncGridPaletteChangeChance,
         LowSparklesPerSecond = new FloatRange(
             SyncLowSparklesPerSecondMin,
