@@ -73,48 +73,45 @@ public class ColorSparkle : EffectBase
 
     /// <summary>
     /// Authored maximum cyclic palette coordinate for Synced palette variants, tuned at the wall to
-    /// a fifth of the palette.
+    /// the whole palette once the conditioned confetti and the 2-and-4 turn landed.
     /// </summary>
-    private const float SyncCoordinateMax = 0.2f;
+    private const float SyncCoordinateMax = 1f;
 
-    /// <summary>Authored minimum Synced sparkle rate while Energy is Low.</summary>
-    private const float SyncLowSparklesPerSecondMin = 500f;
+    /// <summary>Authored minimum Synced sparkle rate while Energy is Low, tuned at the wall.</summary>
+    private const float SyncLowSparklesPerSecondMin = 400f;
 
-    /// <summary>Authored maximum Synced sparkle rate while Energy is Low.</summary>
-    private const float SyncLowSparklesPerSecondMax = 700f;
+    /// <summary>Authored maximum Synced sparkle rate while Energy is Low, tuned at the wall.</summary>
+    private const float SyncLowSparklesPerSecondMax = 600f;
 
-    /// <summary>Authored minimum Synced sparkle rate while Energy is Mid.</summary>
-    private const float SyncMidSparklesPerSecondMin = 300f;
+    /// <summary>Authored minimum Synced sparkle rate while Energy is Mid, tuned at the wall.</summary>
+    private const float SyncMidSparklesPerSecondMin = 200f;
 
-    /// <summary>Authored maximum Synced sparkle rate while Energy is Mid.</summary>
-    private const float SyncMidSparklesPerSecondMax = 500f;
+    /// <summary>Authored maximum Synced sparkle rate while Energy is Mid, tuned at the wall.</summary>
+    private const float SyncMidSparklesPerSecondMax = 400f;
 
-    /// <summary>Authored minimum Synced sparkle rate while Energy is High.</summary>
-    private const float SyncHighSparklesPerSecondMin = 150f;
+    /// <summary>Authored minimum Synced sparkle rate while Energy is High, tuned at the wall.</summary>
+    private const float SyncHighSparklesPerSecondMin = 100f;
 
-    /// <summary>Authored maximum Synced sparkle rate while Energy is High.</summary>
-    private const float SyncHighSparklesPerSecondMax = 300f;
+    /// <summary>Authored maximum Synced sparkle rate while Energy is High, tuned at the wall.</summary>
+    private const float SyncHighSparklesPerSecondMax = 200f;
 
     /// <summary>Authored inclusive minimum glint count while Energy is Low.</summary>
     private const int SyncLowGlintsPerBeatMinInclusive = 10;
 
-    /// <summary>Authored exclusive maximum glint count while Energy is Low.</summary>
-    private const int SyncLowGlintsPerBeatMaxExclusive = 40;
+    /// <summary>Authored exclusive maximum glint count while Energy is Low, tuned at the wall.</summary>
+    private const int SyncLowGlintsPerBeatMaxExclusive = 50;
 
     /// <summary>Authored inclusive minimum glint count while Energy is Mid.</summary>
     private const int SyncMidGlintsPerBeatMinInclusive = 50;
 
-    /// <summary>Authored exclusive maximum glint count while Energy is Mid.</summary>
-    private const int SyncMidGlintsPerBeatMaxExclusive = 150;
+    /// <summary>Authored exclusive maximum glint count while Energy is Mid, tuned at the wall.</summary>
+    private const int SyncMidGlintsPerBeatMaxExclusive = 100;
 
-    /// <summary>Authored inclusive minimum glint count while Energy is High.</summary>
-    private const int SyncHighGlintsPerBeatMinInclusive = 150;
+    /// <summary>Authored inclusive minimum glint count while Energy is High, tuned at the wall.</summary>
+    private const int SyncHighGlintsPerBeatMinInclusive = 100;
 
-    /// <summary>Authored exclusive maximum glint count while Energy is High.</summary>
-    private const int SyncHighGlintsPerBeatMaxExclusive = 300;
-
-    /// <summary>Authored high Rail for the High-Energy glint count, one third of the wall.</summary>
-    private const int SyncHighGlintsPerBeatHighRail = 300;
+    /// <summary>Authored exclusive maximum glint count while Energy is High, tuned at the wall.</summary>
+    private const int SyncHighGlintsPerBeatMaxExclusive = 200;
 
     /// <summary>Authored choice to place Synced rates and counts from a live Levels reading.</summary>
     private const bool SyncLevelsDrive = true;
@@ -122,14 +119,14 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored Levels band that places Synced sparkle rates and glint counts.</summary>
     private const Band SyncLevelsDriveBand = Band.Low;
 
-    /// <summary>Authored Levels form that places Synced sparkle rates and glint counts.</summary>
-    private const LevelsForm SyncLevelsDriveForm = LevelsForm.Normalized;
+    /// <summary>Authored Levels form that places Synced sparkle rates and glint counts, tuned at the wall.</summary>
+    private const LevelsForm SyncLevelsDriveForm = LevelsForm.Smoothed;
 
     /// <summary>Authored Levels band that gates beat-fired glints.</summary>
     private const Band SyncGlintGateBand = Band.Low;
 
-    /// <summary>Authored Levels form that gates beat-fired glints.</summary>
-    private const LevelsForm SyncGlintGateForm = LevelsForm.Normalized;
+    /// <summary>Authored Levels form that gates beat-fired glints, tuned at the wall.</summary>
+    private const LevelsForm SyncGlintGateForm = LevelsForm.Smoothed;
 
     /// <summary>Authored Levels threshold that a beat must exceed before glints fire.</summary>
     private const float SyncGlintGateThreshold = 0.375f;
@@ -358,9 +355,7 @@ public class ColorSparkle : EffectBase
             SyncMidGlintsPerBeatMaxExclusive),
         HighGlintsPerBeat = new IntRange(
             SyncHighGlintsPerBeatMinInclusive,
-            SyncHighGlintsPerBeatMaxExclusive,
-            SyncHighGlintsPerBeatMinInclusive,
-            SyncHighGlintsPerBeatHighRail),
+            SyncHighGlintsPerBeatMaxExclusive),
         LevelsDrive = SyncLevelsDrive,
         LevelsDriveBand = SyncLevelsDriveBand,
         LevelsDriveForm = SyncLevelsDriveForm,

@@ -18,44 +18,44 @@ MonoBehaviour:
     ConfettiPaletteSize: 16
     CoordinateRange:
       Min: 0
-      Max: 0.2
+      Max: 1
       LowRail: 0
       HighRail: 1
     LowSparklesPerSecond:
-      Min: 500
-      Max: 700
-      LowRail: 500
-      HighRail: 700
+      Min: 400
+      Max: 600
+      LowRail: 400
+      HighRail: 600
     MidSparklesPerSecond:
-      Min: 300
-      Max: 500
-      LowRail: 300
-      HighRail: 500
+      Min: 200
+      Max: 400
+      LowRail: 200
+      HighRail: 400
     HighSparklesPerSecond:
-      Min: 150
-      Max: 300
-      LowRail: 150
-      HighRail: 300
+      Min: 100
+      Max: 200
+      LowRail: 100
+      HighRail: 200
     LowGlintsPerBeat:
       MinInclusive: 10
-      MaxExclusive: 40
+      MaxExclusive: 50
       LowRail: 10
-      HighRail: 40
+      HighRail: 50
     MidGlintsPerBeat:
       MinInclusive: 50
-      MaxExclusive: 150
+      MaxExclusive: 100
       LowRail: 50
-      HighRail: 150
+      HighRail: 100
     HighGlintsPerBeat:
-      MinInclusive: 150
-      MaxExclusive: 300
-      LowRail: 150
-      HighRail: 300
+      MinInclusive: 100
+      MaxExclusive: 200
+      LowRail: 100
+      HighRail: 200
     LevelsDrive: 1
     LevelsDriveBand: 0
-    LevelsDriveForm: 0
+    LevelsDriveForm: 1
     GlintGateBand: 0
-    GlintGateForm: 0
+    GlintGateForm: 1
     GlintGateThreshold: 0.375
     GlintLuminance:
       Min: 0.6
