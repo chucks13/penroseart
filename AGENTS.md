@@ -35,12 +35,12 @@ Triage uses the default status strings: `needs-triage`, `needs-info`, `ready-for
 
 ### Domain docs
 
-This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `docs/agents/domain.md`.
+This is a single-context repo: root `GLOSSARY.md` plus root `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Start Here
 
 - `readme.md` — current orientation and runtime loop.
-- `CONTEXT.md` — canonical project glossary (pure vocabulary; architecture, platform, and output notes live in `docs/runtime-architecture.md`).
+- `GLOSSARY.md` — canonical project glossary (pure vocabulary; architecture, platform, and output notes live in `docs/runtime-architecture.md`).
 - Switching behavior: the code under `Assets/core/Switching/` and ADRs 0009–0011 are authoritative. Read those ADRs before Director, Switcher, or sequencing work. The archived design model is `docs/investigation/switching-model.md`.
 - `docs/runtime-architecture.md`, `docs/effect-authoring.md`, and `docs/code-map.md` — runtime shape, effect authoring, and file map.
 - `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards (a dormant path: serial is compiled out).
@@ -171,7 +171,7 @@ Start with these before adding new structures:
 ## Documentation and Workflows
 
 - ADR style: the domain-modeling skill's `ADR-FORMAT.md` is the single authority. Read that file before writing an ADR; never derive the format from past ADRs or from summaries of it.
-- **Documentation lives where it cannot drift.** Behavior belongs in the code as XML doc comments, vocabulary in `CONTEXT.md`, decisions in ADRs, and wire and hardware facts in the contracts. Navigation belongs in `readme.md`, `docs/code-map.md`, and `docs/runtime-architecture.md`. A markdown file that re-explains what the code already says is a second source of truth. Fold it into XML docs on the owning symbols, then delete it.
+- **Documentation lives where it cannot drift.** Behavior belongs in the code as XML doc comments, vocabulary in `GLOSSARY.md`, decisions in ADRs, and wire and hardware facts in the contracts. Navigation belongs in `readme.md`, `docs/code-map.md`, and `docs/runtime-architecture.md`. A markdown file that re-explains what the code already says is a second source of truth. Fold it into XML docs on the owning symbols, then delete it.
 - **Document what you touch:** any symbol you touch or create — public or private, production or test — gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). New files start with a `//` file-purpose comment. Touched tests document the scenario under test and the asserted outcome; `<inheritdoc/>` is not a stand-in for that. Repair documentation warnings (bad cref, placement) — never delete a doc comment to silence one. There is deliberately no compiler-enforced documentation gate.
 - **Rules, not rulers:** documents state rules and name roles, never people. A rule stands on its location and its reason, never on who decided it. Attribution lives in git history and the issue tracker. When a document must mark a settled point, label the point as decided and state it.
 - **History earns its place:** keep skills, plans, and canonical docs free of history. Record a past event only when it changes behavior now, for example a failed approach that must not return. Full provenance belongs in the historical records under `docs/investigation/` and `docs/architecture-reviews/`.

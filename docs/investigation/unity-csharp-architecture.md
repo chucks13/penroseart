@@ -1,6 +1,6 @@
 # Penroseart Unity/C# architecture brief
 
-_Status: historical architecture brief. This file was moved under `docs/investigation/` and updated for known cleanup-branch changes, but many line-number references reflect the source state at the time of the original investigation. Current canonical docs live in `docs/runtime-architecture.md`, `docs/effect-authoring.md`, `docs/code-map.md`, root `readme.md`, and root `CONTEXT.md`.
+_Status: historical architecture brief. This file was moved under `docs/investigation/` and updated for known cleanup-branch changes, but many line-number references reflect the source state at the time of the original investigation. Current canonical docs live in `docs/runtime-architecture.md`, `docs/effect-authoring.md`, `docs/code-map.md`, root `readme.md`, and root `GLOSSARY.md`.
 
 ## Scope and method
 

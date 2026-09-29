@@ -8,6 +8,6 @@ These notes are useful for provenance and deeper context, but they are not the c
 - `../effect-authoring.md`
 - `../code-map.md`
 - `../../readme.md`
-- `../../CONTEXT.md`
+- `../../GLOSSARY.md`
 
 The investigation files have been annotated/trimmed where known stale claims conflicted with the current cleanup branch. Remaining line-number references should still be treated as historical evidence from the time of each investigation, not as stable anchors after later edits.

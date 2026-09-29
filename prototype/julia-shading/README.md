@@ -20,15 +20,15 @@ five saved Standalone presets and six clearly marked candidates. Each candidate
 keeps its breathing-mode center for the original preset-pair audition.
 
 A Tile is one logical Penrose rhomb and the wall's smallest distinct visual area
-(`CONTEXT.md`, **Tile** lines 21–23). The page models Standalone Mode, the
+(`GLOSSARY.md`, **Tile** lines 21–23). The page models Standalone Mode, the
 intentional self-running behavior without the musical clock
-(`CONTEXT.md`, **Standalone Mode / Synced Mode** lines 227–229).
+(`GLOSSARY.md`, **Standalone Mode / Synced Mode** lines 227–229).
 
 The page does not read BeatManager's Data Surface
-(`CONTEXT.md`, **Data Surface** lines 199–201). It invents no Fill, Drop, Energy,
-or Levels value (`CONTEXT.md`, **Fill** lines 173–175, **Drop** lines 177–179,
+(`GLOSSARY.md`, **Data Surface** lines 199–201). It invents no Fill, Drop, Energy,
+or Levels value (`GLOSSARY.md`, **Fill** lines 173–175, **Drop** lines 177–179,
 **Energy** lines 181–183, and **Levels** lines 189–191). It also does not acquire
-or port a Waveform (`CONTEXT.md`, **Waveform** lines 249–251). Those are Synced
+or port a Waveform (`GLOSSARY.md`, **Waveform** lines 249–251). Those are Synced
 Mode facts outside this desk question.
 
 ## Runtime path modeled

@@ -148,7 +148,7 @@ public sealed class TrackCueSheetTests
     public void APhraseEndIsAnOrdinaryCandidateNotAMandatoryMark()
     {
         // The old walk placed a mark on every Phrase end, which is what forced the short gaps at every seam.
-        // Phrase boundaries are preferred positions, not mandates (ADR-0010, CONTEXT.md "Cue Mark"), so across
+        // Phrase boundaries are preferred positions, not mandates (ADR-0010, GLOSSARY.md "Cue Mark"), so across
         // seeds plenty of Phrase ends must go unmarked.
         var effects = MixedEffects();
         var transitions = MixedTransitions();

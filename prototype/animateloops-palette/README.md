@@ -18,10 +18,10 @@ scene palette raw and with the Angles Standalone conditioning preset.
 The prototype models the Standalone-look layers. Its optional **Simulated beat
 pulse** is an explicit stand-in flag, not Synced Mode. In project vocabulary, a
 Ring is a closed circuit, an Arc is its wall-clipped open form, and either group is
-a Motif (`CONTEXT.md:45–47`, `61–67`). Standalone Mode is the intentional
-self-running behavior without the musical clock (`CONTEXT.md:227–229`). The local
+a Motif (`GLOSSARY.md:45–47`, `61–67`). Standalone Mode is the intentional
+self-running behavior without the musical clock (`GLOSSARY.md:227–229`). The local
 envelope is unipolar `[0..1]`, matching the range of a Waveform but not acquiring
-or porting one (`CONTEXT.md:247–251`).
+or porting one (`GLOSSARY.md:247–251`).
 
 ## Runtime path modeled
 

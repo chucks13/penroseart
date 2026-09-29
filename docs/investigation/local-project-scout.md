@@ -1,12 +1,12 @@
 # Code Context
 
-_Status: historical local scout. This file was moved under `docs/investigation/` and updated for known cleanup-branch changes, but many line-number references reflect the source state at the time of the scout. Current canonical docs live in `docs/runtime-architecture.md`, `docs/effect-authoring.md`, `docs/code-map.md`, root `readme.md`, and root `CONTEXT.md`.
+_Status: historical local scout. This file was moved under `docs/investigation/` and updated for known cleanup-branch changes, but many line-number references reflect the source state at the time of the scout. Current canonical docs live in `docs/runtime-architecture.md`, `docs/effect-authoring.md`, `docs/code-map.md`, root `readme.md`, and root `GLOSSARY.md`.
 
 ## Files Retrieved
 
 1. `readme.md` (lines 1-64) - concise lifecycle notes for effects, animation deck, beat variants, Nova override, palette system, `ScreenEffect`, mixers, wrappers.
-2. `CONTEXT.md` (lines 1-48) - project overview and intended architecture, including controller, beat, buffer, palette, I/O, and build-symbol notes.
-3. `Assets/core/helpers/CONTEXT.md` (lines 1-17) - helper/hardware performance notes for serial output and S2 Mini controllers.
+2. `GLOSSARY.md` (lines 1-48) - project overview and intended architecture, including controller, beat, buffer, palette, I/O, and build-symbol notes.
+3. `Assets/core/helpers/GLOSSARY.md` (lines 1-17) - helper/hardware performance notes for serial output and S2 Mini controllers.
 4. `ProjectSettings/ProjectVersion.txt` (lines 1-2) - Unity editor version: `6000.4.7f1`.
 5. `Packages/manifest.json` (lines 1-48) - Unity package dependencies, including Test Framework, UGUI, TextMesh Pro-related modules, Timeline, navigation, IDE integrations.
 6. `ProjectSettings/EditorBuildSettings.asset` (lines 1-11) - enabled build scene: `Assets/Scenes/SampleScene.unity`.
@@ -225,7 +225,7 @@ Examples:
 ## Unknowns / Unity-specific follow-up
 
 - **Deployment output path:** Current docs and source align on USB serial as the active output path, with ACN/E1.31 UDP retained as legacy/fallback. Hardware validation with S2 Mini / ESP32 boards is still needed.
-- **Firmware location:** `Assets/core/helpers/CONTEXT.md` references `main.cpp`, but no `main.cpp` exists under `Assets/`. Firmware may live in another repo or is missing.
+- **Firmware location:** `Assets/core/helpers/GLOSSARY.md` references `main.cpp`, but no `main.cpp` exists under `Assets/`. Firmware may live in another repo or is missing.
 - **Embedded vs StreamingAssets JSON:** `Penrose.Awake()` uses the scene-serialized `jsonSource`, while `Assets/StreamingAssets/rawdata.json` and `rawdata1.json` also exist. Confirm source of truth and update workflow for Penrose geometry/mapping.
 - **Catalog index dependency:** Effects/transitions are now sorted deterministically by `Type.FullName`, but adding/removing/renaming classes can still shift indexes. Scene-serialized numeric fields such as `currentTransition` remain fragile compared with name-based controls.
 - **`startEffect` field:** Serialized in scene, but `SetupEffects()` currently ignores it and always uses `GetNewEffectIndex()`.

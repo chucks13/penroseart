@@ -13,7 +13,7 @@ loss, and whether candidate whole-image edits or alternative black-and-white map
 restore definition at the desk.
 
 A Fill is a Synced Mode fact served by `BeatManager.Fill` through BeatManager's
-Data Surface; Standalone Mode never reports one (`CONTEXT.md`, **Fill** lines
+Data Surface; Standalone Mode never reports one (`GLOSSARY.md`, **Fill** lines
 161–163, **BeatManager** lines 183–185, **Data Surface** lines 187–189, and
 **Standalone Mode / Synced Mode** lines 215–217). The prototype simulates Fill
 active with a flag and never reads OSC. The imported wire lane is documented at

@@ -70,7 +70,7 @@ public class Ripple : ScreenEffect
     /// 0.6 spawns per second at the wall's ordinary tempo.
     /// </summary>
     /// <remarks>
-    /// See Energy and Data Surface in <c>CONTEXT.md</c>, and the <c>/rave/onair/bpm</c> and
+    /// See Energy and Data Surface in <c>GLOSSARY.md</c>, and the <c>/rave/onair/bpm</c> and
     /// <c>/rave/onair/energy_state</c> lanes in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncSpawnsPerCrossingMin = 2.3f;
@@ -81,7 +81,7 @@ public class Ripple : ScreenEffect
     /// 1.2 spawns per second at the wall's ordinary tempo.
     /// </summary>
     /// <remarks>
-    /// See Energy and Data Surface in <c>CONTEXT.md</c>, and the <c>/rave/onair/bpm</c> and
+    /// See Energy and Data Surface in <c>GLOSSARY.md</c>, and the <c>/rave/onair/bpm</c> and
     /// <c>/rave/onair/energy_state</c> lanes in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncSpawnsPerCrossingMax = 4.6f;
@@ -94,21 +94,21 @@ public class Ripple : ScreenEffect
 
     /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at Low Energy.</summary>
     /// <remarks>
-    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// See Energy in <c>GLOSSARY.md</c> and the <c>/rave/onair/energy_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncLowCrossingBeats = 16f;
 
     /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at Mid Energy.</summary>
     /// <remarks>
-    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// See Energy in <c>GLOSSARY.md</c> and the <c>/rave/onair/energy_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncMidCrossingBeats = 8f;
 
     /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at High Energy.</summary>
     /// <remarks>
-    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// See Energy in <c>GLOSSARY.md</c> and the <c>/rave/onair/energy_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncHighCrossingBeats = 4f;
@@ -159,7 +159,7 @@ public class Ripple : ScreenEffect
     /// Synced Mode.
     /// </summary>
     /// <remarks>
-    /// See Levels and the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c>, and
+    /// See Levels and the pulse family (Duration Pulse / Duration Gate) in <c>GLOSSARY.md</c>, and
     /// the <c>/rave/onair/levels</c> and <c>/rave/onair/beat_pulse</c> lanes in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
@@ -167,7 +167,7 @@ public class Ripple : ScreenEffect
 
     /// <summary>Authored amplitude of the wire-beat-pulse hue wiggle in Synced Mode.</summary>
     /// <remarks>
-    /// See the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c> and the
+    /// See the pulse family (Duration Pulse / Duration Gate) in <c>GLOSSARY.md</c> and the
     /// <c>/rave/onair/beat_pulse</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncHueWiggleAmplitude = 0.4f;
@@ -177,7 +177,7 @@ public class Ripple : ScreenEffect
     /// the fraction of the half-wheel journey to the complementary color reached at each pulse peak.
     /// </summary>
     /// <remarks>
-    /// See Fill and the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c>, and
+    /// See Fill and the pulse family (Duration Pulse / Duration Gate) in <c>GLOSSARY.md</c>, and
     /// the <c>/rave/onair/fill_state</c> and
     /// <c>/rave/onair/beat_pulse</c> lanes in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
@@ -187,14 +187,14 @@ public class Ripple : ScreenEffect
     /// Authored number of beats from the Drop landing that spawn extra wavefronts in Synced Mode.
     /// </summary>
     /// <remarks>
-    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// See Drop and Beat Counting in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const int SyncDropSpawnBeats = 32;
 
     /// <summary>Authored number of extra wavefronts spawned on each selected Drop beat.</summary>
     /// <remarks>
-    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// See Drop and Beat Counting in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const int SyncDropSpawnsPerBeat = 2;
@@ -204,7 +204,7 @@ public class Ripple : ScreenEffect
     /// Synced Mode.
     /// </summary>
     /// <remarks>
-    /// See Drop, Edge, and Beat Counting in <c>CONTEXT.md</c>, and the inactive
+    /// See Drop, Edge, and Beat Counting in <c>GLOSSARY.md</c>, and the inactive
     /// <c>count_beats</c> meaning of the <c>/rave/onair/drop_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
@@ -212,7 +212,7 @@ public class Ripple : ScreenEffect
 
     /// <summary>Authored number of wavefronts seeded once before the upcoming Drop.</summary>
     /// <remarks>
-    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// See Drop and Beat Counting in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const int SyncDropSeedSpawns = 6;
@@ -222,7 +222,7 @@ public class Ripple : ScreenEffect
     /// below its presence threshold in Synced Mode.
     /// </summary>
     /// <remarks>
-    /// See Levels and Standalone Mode / Synced Mode in <c>CONTEXT.md:189-191,227-235</c>.
+    /// See Levels and Standalone Mode / Synced Mode in <c>GLOSSARY.md:189-191,227-235</c>.
     /// </remarks>
     private const float SyncHueDriftRate = 0.05f;
 
@@ -233,7 +233,7 @@ public class Ripple : ScreenEffect
     /// </summary>
     /// <remarks>
     /// See Repertoire, Fill, Drop, the pulse family (Duration Pulse / Duration Gate), and Energy
-    /// in <c>CONTEXT.md</c>, and the
+    /// in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/fill_state</c>, <c>/rave/onair/drop_state</c>,
     /// <c>/rave/onair/beat_pulse</c>, and <c>/rave/onair/energy_state</c> lanes in
     /// <c>docs/osc-client-contract.md</c>.
@@ -345,7 +345,7 @@ public class Ripple : ScreenEffect
     /// applies only the current frame's pulse movement.
     /// </summary>
     /// <remarks>
-    /// See the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c> and the
+    /// See the pulse family (Duration Pulse / Duration Gate) in <c>GLOSSARY.md</c> and the
     /// <c>/rave/onair/beat_pulse</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private float previousPulse;
@@ -354,14 +354,14 @@ public class Ripple : ScreenEffect
     /// Previous active Drop beats-remaining value retained for Ripple's consumer-local beat Edge.
     /// </summary>
     /// <remarks>
-    /// See Drop, Data Surface, and Edge in <c>CONTEXT.md</c>, and the
+    /// See Drop, Data Surface, and Edge in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private int? previousDropBeatsRemaining;
 
     /// <summary>Number of Drop beat Edges observed during the current active Drop.</summary>
     /// <remarks>
-    /// See Drop and Edge in <c>CONTEXT.md</c>, and the <c>/rave/onair/drop_state</c> lane in
+    /// See Drop and Edge in <c>GLOSSARY.md</c>, and the <c>/rave/onair/drop_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private int dropSpawnBeatCount;
@@ -371,7 +371,7 @@ public class Ripple : ScreenEffect
     /// while a Drop is active, unannounced, or Standalone Mode rests the group.
     /// </summary>
     /// <remarks>
-    /// See Drop, Data Surface, and Edge in <c>CONTEXT.md</c>, and the
+    /// See Drop, Data Surface, and Edge in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private int? previousDropBeatsUntil;
@@ -380,7 +380,7 @@ public class Ripple : ScreenEffect
     /// Whether the previous frame was in Synced Mode, retained so entering it cannot apply pulse
     /// movement accumulated while Standalone held the hue position.
     /// </summary>
-    /// <remarks>See Standalone Mode / Synced Mode in <c>CONTEXT.md:227-235</c>.</remarks>
+    /// <remarks>See Standalone Mode / Synced Mode in <c>GLOSSARY.md:227-235</c>.</remarks>
     private bool previousIsSynced;
 
     /// <summary>
@@ -496,7 +496,7 @@ public class Ripple : ScreenEffect
         // authored drift moves that same position. Standalone holds it. Advancing previousPulse in
         // every mode and gate state keeps every crossing a velocity change instead of a position
         // jump. See Levels, Standalone Mode / Synced Mode, and the pulse family (Duration Pulse /
-        // Duration Gate) in CONTEXT.md, and the /rave/onair/levels and /rave/onair/beat_pulse
+        // Duration Gate) in GLOSSARY.md, and the /rave/onair/levels and /rave/onair/beat_pulse
         // lanes in docs/osc-client-contract.md.
         float pulse = beatManager.Pulses.Beat;
         if (isSynced)
@@ -517,7 +517,7 @@ public class Ripple : ScreenEffect
         // saturation and brightness, never crossing the gray middle a straight crossfade passes
         // through. The rotation never enters huePhase, so it vanishes without disturbing the wiggle
         // or drift when Active ends. See Fill, Standalone Mode / Synced Mode, and the pulse family
-        // (Duration Pulse / Duration Gate) in CONTEXT.md, and the /rave/onair/fill_state and
+        // (Duration Pulse / Duration Gate) in GLOSSARY.md, and the /rave/onair/fill_state and
         // /rave/onair/beat_pulse lanes in docs/osc-client-contract.md.
         bool fillActive = beatManager.Fill.Active;
         float fillHueRotation = fillActive
@@ -596,7 +596,7 @@ public class Ripple : ScreenEffect
         // its first value is the landing beat, so the local count begins there and rests as soon as
         // Active ends. Drop wavefronts are added after the unchanged paced roll and flat-spawn
         // decision, leaving both existing paths in force. See Drop, Data Surface, and Edge in
-        // CONTEXT.md, and /rave/onair/drop_state in docs/osc-client-contract.md.
+        // GLOSSARY.md, and /rave/onair/drop_state in docs/osc-client-contract.md.
         bool dropActive = beatManager.Drop.Active;
         int? dropBeatsRemaining = dropActive
             ? beatManager.Drop.BeatsRemaining.Value
@@ -623,7 +623,7 @@ public class Ripple : ScreenEffect
         // Seeding once, DropSeedBeatsBefore beats ahead of the landing, puts DropSeedSpawns fresh
         // rings on the wall so the Drop arrives onto visible motion. BeatsUntil is null while a
         // Drop is active or unannounced, so the transition Edge into the authored lead value fires
-        // exactly once per approach. See Drop, Data Surface, and Edge in CONTEXT.md, and the
+        // exactly once per approach. See Drop, Data Surface, and Edge in GLOSSARY.md, and the
         // inactive count_beats meaning of /rave/onair/drop_state in docs/osc-client-contract.md.
         int? dropBeatsUntil = beatManager.Drop.BeatsUntil;
         bool seedEdge = dropBeatsUntil.HasValue &&
@@ -645,7 +645,7 @@ public class Ripple : ScreenEffect
     /// <param name="screenCrossingRadius">Radius a unit-velocity wavefront travels across the screen.</param>
     /// <returns>The positive base clock rate before later choreography steers it.</returns>
     /// <remarks>
-    /// Energy and the Data Surface are defined in <c>CONTEXT.md</c>. Tempo and Energy arrive through
+    /// Energy and the Data Surface are defined in <c>GLOSSARY.md</c>. Tempo and Energy arrive through
     /// <c>/rave/onair/bpm</c> and <c>/rave/onair/energy_state</c> in
     /// <c>docs/osc-client-contract.md</c>. The real-time range applies only here, leaving
     /// <see cref="clockRate"/> free to reach zero or become negative afterward.
@@ -829,21 +829,21 @@ public sealed class RippleSyncSettings
 
     /// <summary>Beats for a unit-velocity wavefront to cross the screen at Low Energy.</summary>
     /// <remarks>
-    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// See Energy in <c>GLOSSARY.md</c> and the <c>/rave/onair/energy_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public float LowCrossingBeats;
 
     /// <summary>Beats for a unit-velocity wavefront to cross the screen at Mid Energy.</summary>
     /// <remarks>
-    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// See Energy in <c>GLOSSARY.md</c> and the <c>/rave/onair/energy_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public float MidCrossingBeats;
 
     /// <summary>Beats for a unit-velocity wavefront to cross the screen at High Energy.</summary>
     /// <remarks>
-    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// See Energy in <c>GLOSSARY.md</c> and the <c>/rave/onair/energy_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public float HighCrossingBeats;
@@ -891,7 +891,7 @@ public sealed class RippleSyncSettings
     /// fraction of the half-wheel journey to the complementary color reached at each pulse peak.
     /// </summary>
     /// <remarks>
-    /// See Fill and the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c>, and
+    /// See Fill and the pulse family (Duration Pulse / Duration Gate) in <c>GLOSSARY.md</c>, and
     /// the <c>/rave/onair/fill_state</c> and
     /// <c>/rave/onair/beat_pulse</c> lanes in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
@@ -899,21 +899,21 @@ public sealed class RippleSyncSettings
 
     /// <summary>Number of beats from the Drop landing that spawn extra wavefronts.</summary>
     /// <remarks>
-    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// See Drop and Beat Counting in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public int DropSpawnBeats;
 
     /// <summary>Number of extra wavefronts spawned on each selected Drop beat.</summary>
     /// <remarks>
-    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// See Drop and Beat Counting in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public int DropSpawnsPerBeat;
 
     /// <summary>Whole beats before the upcoming Drop at which spawn points are seeded once.</summary>
     /// <remarks>
-    /// See Drop, Edge, and Beat Counting in <c>CONTEXT.md</c>, and the inactive
+    /// See Drop, Edge, and Beat Counting in <c>GLOSSARY.md</c>, and the inactive
     /// <c>count_beats</c> meaning of the <c>/rave/onair/drop_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
@@ -921,7 +921,7 @@ public sealed class RippleSyncSettings
 
     /// <summary>Number of wavefronts seeded once before the upcoming Drop.</summary>
     /// <remarks>
-    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// See Drop and Beat Counting in <c>GLOSSARY.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public int DropSeedSpawns;

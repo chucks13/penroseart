@@ -69,11 +69,11 @@ plain text, and a stale asset loads a new field as zero and keeps a removed fiel
 
 This rule holds in every phase, and it has no exception. A musical claim states what a musical
 fact means, does, or can do. Findings, diff reviews, and answers to the maintainer all carry
-musical claims. `CONTEXT.md` and `docs/osc-client-contract.md` settle every musical claim. Code
+musical claims. `GLOSSARY.md` and `docs/osc-client-contract.md` settle every musical claim. Code
 alone cannot settle one, because the runtime only shows what it does with the values that
 arrive. The sender lives in RaveSystem, so no code in this repo says what the wire sends.
 
-1. Before you state a musical claim, read the `CONTEXT.md` entry for every musical term in it.
+1. Before you state a musical claim, read the `GLOSSARY.md` entry for every musical term in it.
 2. Read the _Avoid_ list of each entry.
 3. If the claim depends on what the wire sends, read that lane in `docs/osc-client-contract.md`.
 4. Cite the entries and the lanes where you state the claim.
@@ -114,7 +114,7 @@ Rejoin the phase the evidence names, not the phase the last comment names.
    Repertoire classifications are design judgments; work with that vocabulary loaded, not from
    memory of it.
 
-4. Read the ticket **and every comment on it**, `CONTEXT.md` — musicality work
+4. Read the ticket **and every comment on it**, `GLOSSARY.md` — musicality work
    spans its Rhythm, Waveform, and Effect-configuration vocabulary — every ADR in `docs/adr/`,
    `docs/effect-authoring.md`, and `docs/osc-client-contract.md`. The ADRs are terse and all of
    them stand.
@@ -175,7 +175,7 @@ Run the loop below once per stage. Offer musicality ideas inside step 1 of the s
 a suggestion about Drop belongs in the Drop stage, not in the basic-musicality discussion.
 
 Vocabulary: **Levels**, **Energy**, **Waveform**, **Fill**, **Drop**, and **Data Surface** are
-`CONTEXT.md` terms.
+`GLOSSARY.md` terms.
 Use them exactly as the glossary defines them, and sharpen the glossary when a discussion refines
 one.
 
@@ -290,11 +290,11 @@ and side quests included. The coordinator does not narrow this scope.
 
 Every brief carries the `AGENTS.md` framing, the goals, the agreed design when the phase produced
 one, the acceptance criteria, the vocabulary, this reading list, and these boundaries. The
-vocabulary is the `CONTEXT.md` entries and this runbook's terms that the work touches.
+vocabulary is the `GLOSSARY.md` entries and this runbook's terms that the work touches.
 
 Reading list — the worker reads all of it before touching code:
 
-- `AGENTS.md`, `CONTEXT.md`, every ADR in `docs/adr/`, `docs/effect-authoring.md`, and
+- `AGENTS.md`, `GLOSSARY.md`, every ADR in `docs/adr/`, `docs/effect-authoring.md`, and
   `docs/osc-client-contract.md`.
 - The Effect's own source and settings assets, and `Assets/core/Rhythm/BeatManager.cs` for the
   surface it may read.
@@ -330,8 +330,8 @@ Boundaries — in every brief:
 
 ## Diff review checklist
 
-- The vocabulary matches `CONTEXT.md` exactly.
-- Every musical claim cites its `CONTEXT.md` entries and its `docs/osc-client-contract.md` lanes.
+- The vocabulary matches `GLOSSARY.md` exactly.
+- Every musical claim cites its `GLOSSARY.md` entries and its `docs/osc-client-contract.md` lanes.
 - Every musical read traces to the Data Surface; no OSC access, no locally computed musical
   fact.
 - Settings resolution consumes no Random.
