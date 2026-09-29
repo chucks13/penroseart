@@ -10,7 +10,7 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.collab-proxy": {
-      "version": "2.12.4",
+      "version": "2.13.6",
       "depth": 0,
       "source": "registry",
       "dependencies": {},
@@ -32,7 +32,7 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.multiplayer.center": {
-      "version": "1.0.1",
+      "version": "2.0.1",
       "depth": 0,
       "source": "builtin",
       "dependencies": {
@@ -40,7 +40,7 @@
       }
     },
     "com.unity.test-framework": {
-      "version": "1.7.0",
+      "version": "1.8.0",
       "depth": 0,
       "source": "builtin",
       "dependencies": {
@@ -50,19 +50,18 @@
       }
     },
     "com.unity.timeline": {
-      "version": "1.8.13",
+      "version": "6.6.0",
       "depth": 0,
-      "source": "registry",
+      "source": "builtin",
       "dependencies": {
-        "com.unity.modules.audio": "1.0.0",
         "com.unity.modules.director": "1.0.0",
         "com.unity.modules.animation": "1.0.0",
+        "com.unity.modules.audio": "1.0.0",
         "com.unity.modules.particlesystem": "1.0.0"
-      },
-      "url": "https://packages.unity.com"
+      }
     },
     "com.unity.ugui": {
-      "version": "2.5.0",
+      "version": "2.6.0",
       "depth": 0,
       "source": "builtin",
       "dependencies": {
@@ -222,6 +221,12 @@
         "com.unity.modules.physics": "1.0.0",
         "com.unity.modules.terrain": "1.0.0"
       }
+    },
+    "com.unity.modules.tetgen": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
     },
     "com.unity.modules.tilemap": {
       "version": "1.0.0",
