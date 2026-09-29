@@ -4,25 +4,21 @@ Effects are plain C# classes that fill a 900-color buffer for the Penrose Wall. 
 
 ## Create a new effect
 
-1. Copy `Assets/effects/EmptyEffect.cs` and `Assets/effects/EmptyEffectSyncSettingsAsset.cs`.
+1. Copy `Assets/effects/EmptyEffect.cs`.
 
-2. Rename the copied files and the `EmptyEffect` class for the new Effect.
+2. Rename the copied file and the `EmptyEffect` class for the new Effect.
 
-3. Rename `EmptyEffectStandaloneSettings`, `EmptyEffectSyncSettings`, and `EmptyEffectSyncSettingsAsset` for the new Effect. Update the copied `[CreateAssetMenu(...)]` file and menu names and the `[EffectSyncSettings(typeof(...))]` attribute.
+3. Delete the `#if TEMPLATE` and `#endif` lines, and rewrite the top comment to say what the copy does.
 
-4. Fill in the copied Effect Settings scaffold with the new Effect's authored values.
+4. Implement `Draw()`.
 
-5. Remove `[RuntimeCatalogIgnore]` from the Effect copy.
+5. Enter Play Mode or run a compile/import check. Unity then generates the `.meta` file and compiles the class.
 
-6. Delete the `EXAMPLE` members that the Effect does not need and implement `Draw()`.
+Unity compiles none of `EmptyEffect` itself, because `TEMPLATE` is never defined. The copy compiles, joins the catalog, and runs as it stands, drawing black until `Draw()` does more.
 
-7. Enter Play Mode or run a compile/import check. Unity then generates both `.meta` files and compiles both classes.
+An Effect needs no settings. Most Effects gain Standalone Settings and Sync Settings over time, and [Add Effect Settings](#add-effect-settings) covers that step. The runtime, the Tuning Window, and the catalog tools treat an Effect without settings as not fitted and run it as it is.
 
-8. Create the Sync Settings asset from the Tuning Window's Effects tab — compiling alone does not create it (see [Wire the Sync Settings path](#wire-the-sync-settings-path)).
-
-The runtime catalog intentionally ignores `EmptyEffect`. Keep, rename, and fill in its Effect Settings scaffold. Delete the illustrative `EXAMPLE` members as needed.
-
-### Start with Effect Settings
+### Add Effect Settings
 
 Use the canonical [`GLOSSARY.md` Effect configuration terms](../GLOSSARY.md#effect-configuration). They are Effect Settings, Standalone Defaults, Sync Defaults, Standalone Settings, and Sync Settings. [`ADR-0013`](adr/0013-standalone-settings-join-the-editor.md) records the standing decision, superseding [`ADR-0012`](adr/0012-an-effects-standalone-look-is-fixed-its-mechanism-is-not.md). This guide shows its code layout and does not redefine the vocabulary.
 
@@ -44,17 +40,17 @@ The scaffold standardizes where authored values live and how an Effect reaches i
 
 #### Wire the Sync Settings path
 
-The copied `EmptyEffect` skeleton already wires the Sync Settings path. Rename and fill in each piece. Do not delete and rebuild the structure.
+Copy the wiring from a fitted Effect. [`Waterfall`](../Assets/effects/Waterfall.cs) and its [`WaterfallSyncSettingsAsset`](../Assets/effects/WaterfallSyncSettingsAsset.cs) show every piece.
 
-1. Rename `EmptyEffectStandaloneSettings` and `EmptyEffectSyncSettings` for the new Effect.
+1. Define a Standalone Settings type and a Sync Settings type for the Effect, such as `WaterfallStandaloneSettings` and `WaterfallSyncSettings`.
 
-   The Standalone Settings type carries the fixed Standalone Settings in code. The Sync Settings type defines the serializable saved shape. Replace the placeholder fields. Keep suitable `[Range]` or `[Min]` bounds on Inspector values.
+   The Standalone Settings type carries the fixed Standalone Settings in code. The Sync Settings type defines the serializable saved shape. Keep suitable `[Range]` or `[Min]` bounds on Inspector values.
 
-2. Update the copied `StandaloneSettings`, `SyncDefaults`, and `SyncSettings` properties with the new type names.
+2. Add the `StandaloneDefaults` and `SyncDefaults` static properties, the `standaloneSettings` field, and the `SyncSettings` property.
 
-   The Standalone Settings property builds a fresh value from Standalone Defaults. The Sync Defaults property builds a fresh value from the file-local Sync Defaults. The Sync Settings property holds the saved or fallback value for the current activation.
+   Each defaults property builds a fresh value from its file-local defaults block. The field and the property hold the saved or fallback values for the current activation.
 
-3. Rename `EmptyEffectSyncSettingsAsset.cs` and `EmptyEffectSyncSettingsAsset` for the new Effect. Update the copied `[CreateAssetMenu(...)]` file and menu names. Update the copied `[EffectSyncSettings(typeof(...))]` attribute. The asset stores the serialized Sync Settings for its Effect. The restore method copies the current file-local Sync Defaults over the saved copy.
+3. Add `<EffectName>SyncSettingsAsset.cs` with its `[CreateAssetMenu(...)]` file and menu names, and put `[EffectSyncSettings(typeof(<EffectName>SyncSettingsAsset))]` on the Effect. The asset stores the serialized Sync Settings for its Effect. The restore method copies the current file-local Sync Defaults over the saved copy.
 
 4. Call `EffectSyncSettingsProvider.Resolve(typeof(<EffectName>), SyncDefaults)` wherever the Effect refreshes its settings — activation (`OnStart`) is the usual spot, and whether it also refreshes elsewhere is the Effect's choice. The provider loads `Resources/EffectSyncSettings/<EffectName>Settings`. When no asset exists, the provider uses the supplied file-local Sync Defaults. The provider consumes no `UnityEngine.Random`, so resolution never disturbs an Effect's roll order.
 
@@ -87,7 +83,7 @@ A Sync Setting baked into an `Init`-time cache is only half-live. The cache is b
 [`Flock`](../Assets/effects/Flock.cs) is the advanced reference for a production music-reactive effect. Its source is organized in
 reading order—signal hierarchy, artistic tuning, runtime state, lifecycle, frame pipeline, musical mappings,
 and simulation—and documents why each musical source controls its particular visual consequence. Start from
-`EmptyEffect`; consult `Flock` when adding Routines, calibrated levels, Standalone behavior, Fill/Drop
+`EmptyEffect`. Consult `Flock` when adding Routines, calibrated levels, Standalone behavior, Fill/Drop
 choreography, persistent trails, or a stateful simulation.
 
 ## Rhythm cheat sheet
@@ -115,11 +111,11 @@ Optional musical facts are nullable. Use `?? fallback` or `is { } value`. Boolea
 
 1. Copy `Assets/transitions/EmptyTransition.cs`.
 2. Rename the file and class to the new transition name.
-3. Remove `[RuntimeCatalogIgnore]` from the copy.
-4. Adjust its Runway/Tail settings and implement the A-to-B blend in `Draw()`.
+3. Delete the `#if TEMPLATE` and `#endif` lines, and rewrite the top comment to say what the copy does.
+4. Implement the A-to-B blend in `Draw()`.
 5. Enter Play Mode or run a compile/import check so Unity generates the new `.meta` file and compiles the class.
 
-`EmptyTransition` is likewise ignored by the runtime catalog. Its comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire's Runway and Tail also participate in track-sheet planning: the Director casts Transitions that fit the space they are given, and no Transition's Runway or Tail crosses a Drop or Fill moment (see [`TrackCueSheet`](../Assets/core/Switching/TrackCueSheet.cs) and ADRs 0009-0011).
+Unity compiles none of `EmptyTransition` itself, because `TEMPLATE` is never defined. The copy compiles, joins the catalog, and runs as it stands as a plain crossfade. A Transition needs no settings: without an override of `BuildCodeDefaults()` it uses the default Transition Repertoire. Override `BuildCodeDefaults()` to give it its own Runway, Tail, Shape, and Intensity. The `EmptyTransition` comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire's Runway and Tail also participate in track-sheet planning: the Director casts Transitions that fit the space they are given, and no Transition's Runway or Tail crosses a Drop or Fill moment (see [`TrackCueSheet`](../Assets/core/Switching/TrackCueSheet.cs) and ADRs 0009-0011).
 
 ## Choose a base class
 

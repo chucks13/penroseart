@@ -41,9 +41,9 @@ Effects write into a `Color[] buffer` with `Penrose.Total == 900` entries. The c
 
 ## Authoring effects and transitions
 
-For a new effect, follow the fitted scaffold workflow in [`docs/effect-authoring.md`](docs/effect-authoring.md). It covers the Effect class, Standalone and Sync Settings, Unity-generated assets, and the required catalog opt-in.
+For a new effect, copy `Assets/effects/EmptyEffect.cs`, rename the file and class, delete its `#if TEMPLATE` and `#endif` lines, and implement `Draw()`. The copy runs with no settings. [`docs/effect-authoring.md`](docs/effect-authoring.md) covers the steps and adding Standalone and Sync Settings later.
 
-For a new transition, copy `Assets/transitions/EmptyTransition.cs`, rename the file and class, remove `[RuntimeCatalogIgnore]`, and implement its A-to-B blend and timing settings.
+For a new transition, copy `Assets/transitions/EmptyTransition.cs`, rename the file and class, delete its `#if TEMPLATE` and `#endif` lines, and implement its A-to-B blend.
 
 Choose the base class by shape:
 
