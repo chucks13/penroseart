@@ -1618,7 +1618,7 @@ public sealed class EffectSyncSettingsTests
     /// Defaults object.
     /// </summary>
     /// <remarks>
-    /// See Drop in <c>CONTEXT.md</c> and the <c>/rave/onair/drop_state</c> lane in
+    /// See Drop in <c>GLOSSARY.md</c> and the <c>/rave/onair/drop_state</c> lane in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     [Test]

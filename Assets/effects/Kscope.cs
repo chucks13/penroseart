@@ -630,7 +630,7 @@ public class Kscope : ScreenEffect
     /// independent of source dimensions, while sampling remains one source texel per screen-buffer
     /// pixel so image presentation stays unchanged. A mode change mid-activation re-rolls the
     /// Effect, so each mode's law always runs on values its own Roll determined. Musical meanings are defined by the Data Surface,
-    /// Energy, and Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes are defined in
+    /// Energy, and Levels entries in <c>GLOSSARY.md</c>; timing and pulse lanes are defined in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public override void Draw()
@@ -803,7 +803,7 @@ public class Kscope : ScreenEffect
 
     /// <summary>Maps Low/Mid/High Energy onto the authored pace range, resting at neutral when unavailable.</summary>
     /// <remarks>
-    /// Musical meaning: <c>CONTEXT.md</c> entry Energy; wire lane:
+    /// Musical meaning: <c>GLOSSARY.md</c> entry Energy; wire lane:
     /// <c>docs/osc-client-contract.md</c> <c>/rave/onair/energy_state</c>.
     /// </remarks>
     private float ReadEnergyPace()
@@ -823,7 +823,7 @@ public class Kscope : ScreenEffect
     /// The wire pulse is a triangle: one on each beat, zero halfway to the next beat, then rising
     /// back to one. Multiplying that continuous shape by thresholded Normalized Low produces the
     /// authored beat-synchronous push; it is not a one-shot trigger. Musical meanings:
-    /// <c>CONTEXT.md</c> entries Duration Pulse / Duration Gate — whose pulse-offering list
+    /// <c>GLOSSARY.md</c> entries Duration Pulse / Duration Gate — whose pulse-offering list
     /// names the wire's own analyzed <c>beat_pulse</c>, the distinct offering read here — and
     /// Levels; wire lanes: <c>docs/osc-client-contract.md</c> <c>/rave/onair/beat_pulse</c>
     /// and <c>/rave/onair/levels</c>.

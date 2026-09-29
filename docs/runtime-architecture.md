@@ -2,7 +2,7 @@
 
 PenroseArt is a Unity-hosted C# runtime for the Penrose Wall LED installation. Unity provides the scene host, editor workflow, preview mesh, UI text, keyboard input, and platform packaging. The visual system itself is mostly plain C# classes that render into fixed-size color buffers and then send those buffers to both the Unity preview mesh and hardware output.
 
-This document describes how the runtime is built and how it behaves. The vocabulary it uses — Cue Mark, Runway, Grid, Focus, Performer, and the rest — is defined once in [`CONTEXT.md`](../CONTEXT.md); durable decisions and their rationale live in [`docs/adr/`](adr/).
+This document describes how the runtime is built and how it behaves. The vocabulary it uses — Cue Mark, Runway, Grid, Focus, Performer, and the rest — is defined once in [`GLOSSARY.md`](../GLOSSARY.md); durable decisions and their rationale live in [`docs/adr/`](adr/).
 
 ## Runtime shape
 
@@ -110,7 +110,7 @@ The Switcher uses Runway to decide when a Cue Mark is due and starts the Transit
 
 `BeatManager` is the one read-only musical gateway for the whole application: anything needing a musical fact reads it there, which is why nothing else reads OSC directly. `RaveOscReceiver.ApplyTo(...)` applies the latest live on-air snapshot before `BeatManager.Update()` captures the frame. Without a usable live clock the wall is deliberately in Standalone Mode — a preference, not a fallback.
 
-The Data Surface is shallow and frame-coherent: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Players`, `LiveOrder`, and always-present `Levels`. Individual wire values read `null` when unavailable; derived values sit beside the wire values they describe. Consumers own any previous-frame comparisons, and `IsSynced` is the single mode authority. The [`BeatManager` XML docs](../Assets/core/Rhythm/BeatManager.cs) define the code contract, [`CONTEXT.md`](../CONTEXT.md) defines its vocabulary, and ADR-0005 governs read-only serving.
+The Data Surface is shallow and frame-coherent: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Players`, `LiveOrder`, and always-present `Levels`. Individual wire values read `null` when unavailable; derived values sit beside the wire values they describe. Consumers own any previous-frame comparisons, and `IsSynced` is the single mode authority. The [`BeatManager` XML docs](../Assets/core/Rhythm/BeatManager.cs) define the code contract, [`GLOSSARY.md`](../GLOSSARY.md) defines its vocabulary, and ADR-0005 governs read-only serving.
 
 `Waveforms` is a sibling acquisition surface, not a child of BeatManager. The Controller constructs one shared instance from the live BeatManager and exposes it read-only to Effects and Transitions as `waveforms`. Performers acquire immutable, clock-bound `Waveform` values uniformly across the Pool, by Energy, or by the first exact display-name match; they may instead compose a `Routine`. Each held value reads its own `Envelope` or maps it through `Lerp(from, to)`. `Waveforms.None` is the explicit non-null value a Mixer assigns to suppress a child's response.
 
