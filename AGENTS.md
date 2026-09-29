@@ -130,6 +130,15 @@ Start with these before adding new structures:
 - Do not hand-edit Unity-generated `.csproj`, `.sln`, or `.slnx` files. Regenerate them through Unity when needed.
 - Do not treat Unity-generated files as stable hand-authored source.
 
+## Scratch Directory
+
+- `.scratch/` at the repo root holds every temporary file an agent or script creates: logs,
+  test output, drafts, and local player builds. Git tracks only `.scratch/.gitkeep` and
+  ignores everything else in the folder.
+- Set the build location in Unity's Build Profiles window to a folder under `.scratch/`.
+- Any file in `.scratch/` can disappear. Keep anything that must last outside it.
+- Unity's own `Library/`, `Temp/`, and `Logs/` stay where Unity puts them.
+
 ## Validation Scripts
 
 - `scripts/unity-compile.sh` compiles and imports; `scripts/unity-tests.sh [filter]` runs the
