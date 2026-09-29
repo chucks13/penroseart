@@ -24,8 +24,11 @@
 .vscode/
 *.dotsettings
 
-# Agent scratch: purely local, never tracked.
-/.scratch/
+# Scratch: the folder ships with every clone through .gitkeep; everything in it stays local.
+# The first line un-ignores the folder itself, which a global ignore rule may exclude.
+!/.scratch/
+/.scratch/*
+!/.scratch/.gitkeep
 
 # Claude Code personal/local settings
 .claude/settings.local.json

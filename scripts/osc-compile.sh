@@ -2,7 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-tmp_dir="$(mktemp -d /tmp/penrose-osc-compile.XXXXXX)"
+mkdir -p "$repo_root/.scratch"
+tmp_dir="$(mktemp -d "$repo_root/.scratch/osc-compile.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 cat > "$tmp_dir/PenroseOscCompile.csproj" <<CSHARP_PROJECT

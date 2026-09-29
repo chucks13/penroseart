@@ -212,7 +212,12 @@ unity_run_supervised() {
   unity_owned_log="$log_file"
   unity_owned_bin="$unity_bin"
 
-  "$unity_bin" "$@" &
+  # Unity rejects the leading dot in a -logFile path under .scratch/ with this line, then writes
+  # the log anyway; drop it from the terminal so real Unity output stays readable.
+  local dot_dir_warning='^\.scratch is not a valid directory name\.'
+  "$unity_bin" "$@" \
+    > >(grep --line-buffered -v "$dot_dir_warning") \
+    2> >(grep --line-buffered -v "$dot_dir_warning" >&2) &
   unity_owned_pid=$!
 
   trap 'unity_cleanup_owned_processes' EXIT

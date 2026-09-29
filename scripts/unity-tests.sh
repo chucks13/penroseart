@@ -14,8 +14,8 @@ if [ -z "${UNITY_BIN:-}" ] && [ -z "$editor_version" ]; then
   exit 1
 fi
 unity_bin="${UNITY_BIN:-/Applications/Unity/Hub/Editor/$editor_version/Unity.app/Contents/MacOS/Unity}"
-results_file="${UNITY_TEST_RESULTS:-/tmp/penrose-unity-tests.xml}"
-log_file="${UNITY_TEST_LOG:-/tmp/penrose-unity-tests.log}"
+results_file="${UNITY_TEST_RESULTS:-$repo_root/.scratch/unity-tests.xml}"
+log_file="${UNITY_TEST_LOG:-$repo_root/.scratch/unity-tests.log}"
 platform="${UNITY_TEST_PLATFORM:-EditMode}"
 filter="${1:-${UNITY_TEST_FILTER:-}}"
 assembly_names="${UNITY_TEST_ASSEMBLY_NAMES:-}"
@@ -23,6 +23,8 @@ timeout_seconds="${UNITY_EDITOR_TEST_TIMEOUT:-300}"
 license_timeout="${UNITY_LICENSE_TIMEOUT:-30}"
 process_timeout="${UNITY_TEST_PROCESS_TIMEOUT:-900}"
 status_file="${UNITY_TEST_STATUS:-${results_file%.xml}.status}"
+# .scratch/ is gitignored and may not exist in a fresh checkout.
+mkdir -p "$(dirname "$results_file")" "$(dirname "$log_file")" "$(dirname "$status_file")"
 
 print_results() {
   python3 - "$results_file" <<'PY'

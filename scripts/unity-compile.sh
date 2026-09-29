@@ -14,11 +14,13 @@ if [ -z "${UNITY_BIN:-}" ] && [ -z "$editor_version" ]; then
   exit 1
 fi
 unity_bin="${UNITY_BIN:-/Applications/Unity/Hub/Editor/$editor_version/Unity.app/Contents/MacOS/Unity}"
-log_file="${UNITY_COMPILE_LOG:-/tmp/penrose-unity-compile.log}"
+log_file="${UNITY_COMPILE_LOG:-$repo_root/.scratch/unity-compile.log}"
 license_timeout="${UNITY_LICENSE_TIMEOUT:-30}"
 process_timeout="${UNITY_COMPILE_TIMEOUT:-300}"
 status_file="${UNITY_COMPILE_STATUS:-${log_file%.log}.status}"
 bridge_timeout="${UNITY_EDITOR_COMPILE_TIMEOUT:-300}"
+# .scratch/ is gitignored and may not exist in a fresh checkout.
+mkdir -p "$(dirname "$log_file")" "$(dirname "$status_file")"
 
 if unity_editor_has_project_open "$repo_root"; then
   rm -f "$log_file" "$status_file"
