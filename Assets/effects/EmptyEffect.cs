@@ -1,16 +1,16 @@
-// Copyable, catalog-ignored starter for authoring a new PenroseArt effect.
+// Copyable starter for a new PenroseArt effect. TEMPLATE is never defined, so Unity compiles none of this file.
+#if TEMPLATE
 using UnityEngine;
 
 /// <summary>
 /// Copyable starter template for a new PenroseArt effect.
 /// </summary>
 /// <remarks>
-/// This class is excluded from the runtime effect catalog by <see cref="RuntimeCatalogIgnoreAttribute"/>.
 /// To create a real effect:
 ///
 /// 1. Copy this file.
 /// 2. Rename the file and class to the new effect name.
-/// 3. Remove the <c>[RuntimeCatalogIgnore]</c> attribute from the copy.
+/// 3. Delete the <c>#if TEMPLATE</c> and <c>#endif</c> lines, and rewrite the top comment to say what the copy does.
 /// 4. Implement <see cref="Draw"/>.
 ///
 /// The copy compiles, joins the catalog, and runs as it stands; it draws black until <see cref="Draw"/>
@@ -28,7 +28,6 @@ using UnityEngine;
 /// Live musical values come from <see cref="EffectBase.beatManager"/>, and Waveforms from
 /// <see cref="EffectBase.waveforms"/>.
 /// </remarks>
-[RuntimeCatalogIgnore]
 public class EmptyEffect : EffectBase
 {
     /// <summary>Text appended to the on-screen debug display while this effect is active.</summary>
@@ -46,3 +45,4 @@ public class EmptyEffect : EffectBase
     {
     }
 }
+#endif

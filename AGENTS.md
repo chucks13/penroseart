@@ -106,8 +106,8 @@ Start with these before adding new structures:
 ## Adding Effects, Transitions, and Blenders
 
 - New visuals usually belong as C# classes under `Assets/effects/`, not as new scene object systems.
-- For new effects, copy `Assets/effects/EmptyEffect.cs`, rename the file and class, remove `[RuntimeCatalogIgnore]`, then implement the frame algorithm. See `docs/effect-authoring.md`.
-- For new transitions, copy `Assets/transitions/EmptyTransition.cs`, rename the file and class, remove `[RuntimeCatalogIgnore]`, then implement the A-to-B blend. See `docs/effect-authoring.md`.
+- For new effects, copy `Assets/effects/EmptyEffect.cs`, rename the file and class, delete its `#if TEMPLATE` and `#endif` lines, then implement the frame algorithm. See `docs/effect-authoring.md`.
+- For new transitions, copy `Assets/transitions/EmptyTransition.cs`, rename the file and class, delete its `#if TEMPLATE` and `#endif` lines, then implement the A-to-B blend. See `docs/effect-authoring.md`.
 - Effects and transitions need no settings to compile and run. Add Standalone and Sync Settings when an effect is ready for them, as `docs/effect-authoring.md` describes.
 - Subclass `EffectBase` for direct 900-tile generative effects.
 - Subclass `ScreenEffect` for 2D algorithms that need projection onto the Penrose layout.

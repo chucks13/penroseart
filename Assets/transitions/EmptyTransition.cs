@@ -1,16 +1,16 @@
-// Copyable, catalog-ignored starter for authoring PenroseArt A-to-B transitions.
+// Copyable starter for a new PenroseArt A-to-B transition. TEMPLATE is never defined, so Unity compiles none of this file.
+#if TEMPLATE
 using UnityEngine;
 
 /// <summary>
 /// Copyable starter template for a new PenroseArt effect-to-effect transition.
 /// </summary>
 /// <remarks>
-/// This class is excluded from the runtime transition catalog by <see cref="RuntimeCatalogIgnoreAttribute"/>.
 /// To create a real transition:
 ///
 /// 1. Copy this file.
 /// 2. Rename the file and class to the new transition name.
-/// 3. Remove the <c>[RuntimeCatalogIgnore]</c> attribute from the copy.
+/// 3. Delete the <c>#if TEMPLATE</c> and <c>#endif</c> lines, and rewrite the top comment to say what the copy does.
 /// 4. Implement <see cref="Draw"/>.
 ///
 /// The copy compiles, joins the catalog, and runs as it stands as a plain crossfade. A transition
@@ -26,7 +26,6 @@ using UnityEngine;
 /// Live musical values come from <see cref="TransitionBase.beatManager"/>, and Waveforms from
 /// <see cref="TransitionBase.waveforms"/>.
 /// </remarks>
-[RuntimeCatalogIgnore]
 public class EmptyTransition : TransitionBase
 {
     /// <summary>Per-activation setup; this template has none.</summary>
@@ -52,3 +51,4 @@ public class EmptyTransition : TransitionBase
     {
     }
 }
+#endif

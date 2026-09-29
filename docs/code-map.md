@@ -126,14 +126,14 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 
 | File | Role |
 | --- | --- |
-| `EmptyEffect` | Copy/rename starter effect. Marked `[RuntimeCatalogIgnore]`, so it is never included in the runtime catalog. |
+| `EmptyEffect` | Copy/rename starter effect. Wrapped in `#if TEMPLATE`, which is never defined, so Unity never compiles it. |
 
 ## Transitions
 
 | Transition | Role |
 | --- | --- |
 | `Fade` | Linear crossfade; also supports `[ratio]` external blending. |
-| `EmptyTransition` | Copy/rename starter transition. Marked `[RuntimeCatalogIgnore]`, so it is never included in the runtime catalog. |
+| `EmptyTransition` | Copy/rename starter transition. Wrapped in `#if TEMPLATE`, which is never defined, so Unity never compiles it. |
 | `IndexWipe` | Raw tile-index wipe; also supports `[ratio]` external blending. |
 | `FizzleTransition` | Fixed shuffled reveal order; also supports `[ratio]` external blending. |
 | `DirectionalWipe` | Angle-based geometry wipe; also supports `[ratio] [angle]` external blending. |

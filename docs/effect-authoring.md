@@ -8,13 +8,13 @@ Effects are plain C# classes that fill a 900-color buffer for the Penrose Wall. 
 
 2. Rename the copied file and the `EmptyEffect` class for the new Effect.
 
-3. Remove `[RuntimeCatalogIgnore]` from the copy.
+3. Delete the `#if TEMPLATE` and `#endif` lines, and rewrite the top comment to say what the copy does.
 
 4. Implement `Draw()`.
 
 5. Enter Play Mode or run a compile/import check. Unity then generates the `.meta` file and compiles the class.
 
-The runtime catalog ignores `EmptyEffect` itself. The copy compiles, joins the catalog, and runs as it stands, drawing black until `Draw()` does more.
+Unity compiles none of `EmptyEffect` itself, because `TEMPLATE` is never defined. The copy compiles, joins the catalog, and runs as it stands, drawing black until `Draw()` does more.
 
 An Effect needs no settings. Most Effects gain Standalone Settings and Sync Settings over time, and [Add Effect Settings](#add-effect-settings) covers that step. The runtime, the Tuning Window, and the catalog tools treat an Effect without settings as not fitted and run it as it is.
 
@@ -111,11 +111,11 @@ Optional musical facts are nullable. Use `?? fallback` or `is { } value`. Boolea
 
 1. Copy `Assets/transitions/EmptyTransition.cs`.
 2. Rename the file and class to the new transition name.
-3. Remove `[RuntimeCatalogIgnore]` from the copy.
+3. Delete the `#if TEMPLATE` and `#endif` lines, and rewrite the top comment to say what the copy does.
 4. Implement the A-to-B blend in `Draw()`.
 5. Enter Play Mode or run a compile/import check so Unity generates the new `.meta` file and compiles the class.
 
-The runtime catalog ignores `EmptyTransition` itself. The copy compiles, joins the catalog, and runs as it stands as a plain crossfade. A Transition needs no settings: without an override of `BuildCodeDefaults()` it uses the default Transition Repertoire. Override `BuildCodeDefaults()` to give it its own Runway, Tail, Shape, and Intensity. The `EmptyTransition` comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire's Runway and Tail also participate in track-sheet planning: the Director casts Transitions that fit the space they are given, and no Transition's Runway or Tail crosses a Drop or Fill moment (see [`TrackCueSheet`](../Assets/core/Switching/TrackCueSheet.cs) and ADRs 0009-0011).
+Unity compiles none of `EmptyTransition` itself, because `TEMPLATE` is never defined. The copy compiles, joins the catalog, and runs as it stands as a plain crossfade. A Transition needs no settings: without an override of `BuildCodeDefaults()` it uses the default Transition Repertoire. Override `BuildCodeDefaults()` to give it its own Runway, Tail, Shape, and Intensity. The `EmptyTransition` comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire's Runway and Tail also participate in track-sheet planning: the Director casts Transitions that fit the space they are given, and no Transition's Runway or Tail crosses a Drop or Fill moment (see [`TrackCueSheet`](../Assets/core/Switching/TrackCueSheet.cs) and ADRs 0009-0011).
 
 ## Choose a base class
 
