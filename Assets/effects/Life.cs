@@ -2,21 +2,42 @@ using System.IO;
 using System.Globalization;
 using UnityEngine;
 
+/// <summary>
+/// Cellular Automata effect on a Penrose tiling mesh. 
+/// Loads or computes cached vertex-sharing neighbor data, seeds random noise on start, 
+/// and steps through a rule-based transition system each frame with live mutations.
+/// </summary>
 public class Life : EffectBase
 {
+    /// <summary>Text appended to the on-screen debug display while this effect is active.</summary>
     public override string DebugText() => "Life";
 
+    // Jagged array storing pre-calculated neighbor indices for all 900 tiles.
     private int[][] Neighbors;
+    
+    // Tracks the current cellular automata state (0 to 3) for each of the 900 tiles.
     private int[] states = new int[900];
+    
+    // Raw mesh data array holding triangle vertex coordinates from the Penrose layout.
     private float[] mesh;
+    
+    // Internal timer for lifecycle usage.
     private float timer = 0f;
 
+    /// <summary>
+    /// Helper method to extract a 2D vertex vector from the raw mesh data array.
+    /// Each triangle has 3 vertices, with 2 coordinates (X and Y) per vertex.
+    /// </summary>
     private Vector2 GetVertex(int triangleIndex, int vertexIndex)
     {
         int baseIndex = (triangleIndex * 6) + (vertexIndex * 2);
         return new Vector2(mesh[baseIndex], mesh[baseIndex + 1]);
     }
 
+    /// <summary>
+    /// Checks whether two distinct Penrose tiles share at least one vertex.
+    /// Each tile is composed of 2 triangles (6 vertices total to check per tile pair).
+    /// </summary>
     private bool CheckNeighbor(int i, int j)
     {
         int[] trianglesI = { 2 * i, (2 * i) + 1 };
@@ -41,6 +62,11 @@ public class Life : EffectBase
         return false;
     }
 
+    /// <summary>
+    /// One-time setup after reflection creates the effect. 
+    /// Loads neighbor definitions from a local disk cache to speed up boot times,
+    /// or computes them geometrically and writes them to disk if missing.
+    /// </summary>
     public override void Init()
     {
         base.Init();
@@ -102,9 +128,13 @@ public class Life : EffectBase
         }
     }
 
+    /// <summary>
+    /// Per-activation setup called every time the effect becomes active. 
+    /// Seeds the grid with randomized noise weights.
+    /// </summary>
     public override void OnStart()
     {
-        // Clear or seed with noise
+        // Seed grid states with noise probabilities
         for (int i = 0; i < 900; i++)
         {
             float roll = UnityEngine.Random.value;
@@ -125,12 +155,17 @@ public class Life : EffectBase
         timer = 0f;
     }
 
+    /// <summary>
+    /// Hook triggered on musical grid beats to progress simulation steps.
+    /// </summary>
     protected override void OnNewGrid()
     {
-        // Advance the cellular automaton simulation step on musical grid beats
         StepCellularAutomaton();
     }
 
+    /// <summary>
+    /// Evaluates neighbor states and computes the next state transition for every tile based on the rules table.
+    /// </summary>
     private void StepCellularAutomaton()
     {
         int[] nextStates = new int[900];
@@ -140,7 +175,7 @@ public class Life : EffectBase
             int currentState = states[i];
             int n1 = 0, n2 = 0, n3 = 0;
 
-            // Count neighbor states
+            // Count surrounding neighbor states
             foreach (int neighborIdx in Neighbors[i])
             {
                 int s = states[neighborIdx];
@@ -149,8 +184,8 @@ public class Life : EffectBase
                 else if (s == 3) n3++;
             }
 
-            // Apply rules table
-            int nextState = 0; // Default fallback -> state 0
+            // Apply cellular automaton rules table
+            int nextState = 0; // Default fallback state
 
             if (currentState == 0)
             {
@@ -177,11 +212,17 @@ public class Life : EffectBase
         states = nextStates;
     }
 
+    /// <summary>
+    /// Renders one frame by advancing the simulation, injecting small live noise mutations, 
+    /// and translating states into animated palette colors written into the render buffer.
+    /// </summary>
     public override void Draw()
     {
         StepCellularAutomaton();
-        for(int i=0; i<8; i++)
-            states[Random.Range(0,900)] = Random.Range(0,4);
+        
+        // Inject random mutations to keep patterns lively and prevent stagnation
+        for(int i = 0; i < 8; i++)
+            states[Random.Range(0, 900)] = Random.Range(0, 4);
             
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -203,5 +244,6 @@ public class Life : EffectBase
         }
     }
 
+    /// <summary>Reserved for deactivation cleanup.</summary>
     public override void OnEnd() { }
 }
